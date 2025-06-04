@@ -1,0 +1,96 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+# Build artifacts
+target/
+build/
+out/
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+*.DS_Store
+
+# Log files
+*.log
+logs/
+
+# Local env files
+.env
+
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Gradle
+.gradle/
+build/
+!build/resources/
+!build/classes/
+bin/
+*.jar
+*.war
+*.ear
+
+# Secrets (ensure these are never committed)
+application-secret.properties
+application-*.yml
+src/main/resources/application-local.properties
+src/main/resources/application-dev.properties
+# Add any other files containing sensitive information
+
+# IntelliJ specific
+shelf/
+workspace.xml
+tasks.xml
+
+# Eclipse specific
+.metadata
+
+# NetBeans specific
+nbproject/private/
+build-impl.xml
+nbbuild.xml
+dist/
+nbdist/
+.nb-gradle/
