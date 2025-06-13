@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -47,8 +48,14 @@ public class User {
     @Column(name = "verification_token")
     private String verificationToken;
     
+    @Column(name = "verification_token_expiry")
+    private LocalDateTime verificationTokenExpiry;
+    
     @Column(name = "reset_password_token")
     private String resetPasswordToken;
+    
+    @Column(name = "reset_password_token_expiry")
+    private LocalDateTime resetPasswordTokenExpiry;
     
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(

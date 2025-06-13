@@ -6,7 +6,6 @@ import fpt.aptech.management_field.repositories.UserRepository;
 import fpt.aptech.management_field.security.services.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,7 +27,6 @@ public class UserController {
     private PasswordEncoder passwordEncoder;
 
     @GetMapping("/profile")
-    // @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
     public ResponseEntity<?> getUserProfile() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
