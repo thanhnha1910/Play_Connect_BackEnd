@@ -44,4 +44,7 @@ public interface FieldRepository extends JpaRepository<Field, Long>, JpaSpecific
                                       @Param("categoryId") Long categoryId,
                                       @Param("minHourlyRate") Integer minHourlyRate,
                                       @Param("maxHourlyRate") Integer maxHourlyRate);
+
+    @Query(value = "SELECT f FROM Field f WHERE f.location.locationId = :locationId")
+    List<Field> getFieldsByLocationId(@Param("locationId") Long locationId);
 }
