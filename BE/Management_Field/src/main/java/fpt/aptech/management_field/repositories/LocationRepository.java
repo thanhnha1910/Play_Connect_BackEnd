@@ -55,4 +55,7 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
     // Get minimum hourly rate for a location
     @Query("SELECT MIN(f.hourlyRate) FROM Field f WHERE f.location.locationId = :locationId")
     Integer getMinimumHourlyRateByLocationId(@Param("locationId") Long locationId);
+
+    @Query(value = "SELECT l FROM Location l WHERE LOWER(REPLACE(l.name, ' ', '-')) = :slug ORDER BY l.locationId LIMIT 1")
+    Location getLocationBySlug(@Param("slug") String slug);
 }

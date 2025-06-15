@@ -2,6 +2,7 @@ package fpt.aptech.management_field.controllers;
 
 import fpt.aptech.management_field.payload.response.FieldSummaryResponse;
 import fpt.aptech.management_field.payload.response.LocationCardResponse;
+import fpt.aptech.management_field.payload.response.LocationDetailResponse;
 import fpt.aptech.management_field.payload.response.LocationMapResponse;
 import fpt.aptech.management_field.services.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,26 +22,26 @@ import java.util.List;
 @RequestMapping("/api/locations")
 @Tag(name = "Location Management", description = "APIs for location-based field search and discovery")
 public class LocationController {
-    
+
     @Autowired
     private LocationService locationService;
-    
+
     @GetMapping
     @Operation(summary = "Get all locations for browsing", description = "Get a list of all football field locations for the main discovery page")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved all locations"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved all locations"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     public ResponseEntity<List<LocationCardResponse>> getAllLocations() {
         List<LocationCardResponse> locations = locationService.getAllLocationsForCards();
         return ResponseEntity.ok(locations);
     }
-    
+
     @GetMapping("/map-search")
     @Operation(summary = "Search locations on map", description = "Get a list of locations in a geographic area to display markers on the map")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved locations"),
-        @ApiResponse(responseCode = "400", description = "Invalid parameters")
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved locations"),
+            @ApiResponse(responseCode = "400", description = "Invalid parameters")
     })
     public ResponseEntity<List<LocationMapResponse>> searchLocationsForMap(
             @Parameter(description = "Latitude coordinate", required = true, example = "10.762622")
@@ -59,19 +60,19 @@ public class LocationController {
             @RequestParam(required = false) Integer minHourlyRate,
             @Parameter(description = "Maximum hourly rate filter")
             @RequestParam(required = false) Integer maxHourlyRate) {
-        
+
         List<LocationMapResponse> locations = locationService.searchLocationsForMap(
-            latitude, longitude, radiusKm, zoomLevel, typeId, categoryId, minHourlyRate, maxHourlyRate
+                latitude, longitude, radiusKm, zoomLevel, typeId, categoryId, minHourlyRate, maxHourlyRate
         );
-        
+
         return ResponseEntity.ok(locations);
     }
-    
+
     @GetMapping("/{locationId}/fields")
     @Operation(summary = "Get fields by location", description = "Get a list of fields available at a specific location")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved fields"),
-        @ApiResponse(responseCode = "404", description = "Location not found")
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved fields"),
+            @ApiResponse(responseCode = "404", description = "Location not found")
     })
     public ResponseEntity<List<FieldSummaryResponse>> getFieldsByLocation(
             @Parameter(description = "Location ID", required = true, example = "1")
@@ -84,12 +85,29 @@ public class LocationController {
             @RequestParam(required = false) Integer minHourlyRate,
             @Parameter(description = "Maximum hourly rate filter")
             @RequestParam(required = false) Integer maxHourlyRate) {
-        
+
         try {
             List<FieldSummaryResponse> fields = locationService.getFieldsByLocation(
-                locationId, typeId, categoryId, minHourlyRate, maxHourlyRate
+                    locationId, typeId, categoryId, minHourlyRate, maxHourlyRate
             );
             return ResponseEntity.ok(fields);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/{slug}")
+    @Operation(summary = "Get location details by slug", description = "Get all details of a specific location by slug")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved location details"),
+            @ApiResponse(responseCode = "404", description = "Location details not found")
+    })
+    public ResponseEntity<LocationDetailResponse> getLocationBySlug(
+            @Parameter(description = "Location Slug", required = true)
+            @PathVariable String slug) {
+        try {
+            LocationDetailResponse locationDetail = locationService.getLocationDetail(slug);
+            return ResponseEntity.ok(locationDetail);
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }

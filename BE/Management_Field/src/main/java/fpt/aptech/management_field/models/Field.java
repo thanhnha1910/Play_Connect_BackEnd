@@ -17,7 +17,10 @@ public class Field {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "field_id")
     private Long fieldId;
-    
+
+    @Column(name = "name")
+    private String name;
+
     @Column(name = "hourly_rate")
     private Integer hourlyRate;
     

@@ -29,7 +29,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -193,7 +192,7 @@ public class AuthController {
         userRepository.save(user);
         
         // Send verification email
-        String verificationLink = "http://localhost:3001/verify-email?token=" + token;
+        String verificationLink = "http://localhost:3000/verify-email?token=" + token;
         String subject = "Email Verification";
         String content = "Please click the link below to verify your email address:\n" + verificationLink;
         

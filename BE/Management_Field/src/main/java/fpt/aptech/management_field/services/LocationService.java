@@ -1,18 +1,27 @@
 package fpt.aptech.management_field.services;
 
+import fpt.aptech.management_field.mappers.LocationReviewMapper;
 import fpt.aptech.management_field.models.Field;
+import fpt.aptech.management_field.models.FieldType;
 import fpt.aptech.management_field.models.Location;
+import fpt.aptech.management_field.models.LocationReview;
+import fpt.aptech.management_field.payload.dtos.FieldDTO;
+import fpt.aptech.management_field.payload.dtos.FieldTypeDTO;
+import fpt.aptech.management_field.payload.dtos.LocationReviewDTO;
 import fpt.aptech.management_field.payload.response.FieldSummaryResponse;
 import fpt.aptech.management_field.payload.response.LocationCardResponse;
+import fpt.aptech.management_field.payload.response.LocationDetailResponse;
 import fpt.aptech.management_field.payload.response.LocationMapResponse;
 import fpt.aptech.management_field.repositories.FieldRepository;
 import fpt.aptech.management_field.repositories.LocationRepository;
+import fpt.aptech.management_field.repositories.LocationReviewRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +32,9 @@ public class LocationService {
 
     @Autowired
     private FieldRepository fieldRepository;
+
+    @Autowired
+    private LocationReviewRepository locationReviewRepository;
 
     public List<LocationMapResponse> searchLocationsForMap(BigDecimal latitude,
                                                            BigDecimal longitude,
@@ -148,22 +160,61 @@ public class LocationService {
         response.setLocationId(location.getLocationId());
         response.setLocationName(location.getName());
         response.setAddress(location.getAddress());
-        
+
         // Get field count
         Integer fieldCount = locationRepository.countFieldsByLocationId(location.getLocationId());
         response.setFieldCount(fieldCount != null ? fieldCount : 0);
-        
+
         // Get average rating (may be null if no reviews)
         BigDecimal averageRating = locationRepository.getAverageRatingByLocationId(location.getLocationId());
         response.setAverageRating(averageRating != null ? averageRating.doubleValue() : null);
-        
+
         // Get starting price (minimum hourly rate)
         Integer minHourlyRate = locationRepository.getMinimumHourlyRateByLocationId(location.getLocationId());
         response.setStartingPrice(minHourlyRate != null ? BigDecimal.valueOf(minHourlyRate) : null);
-        
+
         // Set main image URL (TODO: Implement as needed)
         response.setMainImageUrl(null); // TODO: Implement logic to get main image
-        
+
+        return response;
+    }
+
+    public LocationDetailResponse getLocationDetail(String locationSlug) {
+        Location location = locationRepository.getLocationBySlug(locationSlug);
+        if (location == null) {
+            return null;
+        }
+        List<Field> locationFields = fieldRepository.getFieldsByLocationId(location.getLocationId());
+        Map<FieldType, List<Field>> groupedByType = locationFields.stream()
+                .collect(Collectors.groupingBy(Field::getType));
+        List<FieldTypeDTO> typeDTOS = groupedByType.entrySet().stream()
+                .map(entry -> {
+                    FieldType type = entry.getKey();
+                    List<FieldDTO> fieldDTOs = entry.getValue().stream()
+                            .map(field -> new FieldDTO(
+                                    field.getFieldId(),
+                                    field.getName(),
+                                    field.getDescription(),
+                                    field.getHourlyRate()
+                            ))
+                            .collect(Collectors.toList());
+
+                    return new FieldTypeDTO(
+                            type.getName(),
+                            type.getTeamCapacity(),
+                            type.getMaxCapacity(),
+                            fieldDTOs
+                    );
+                }).toList();
+        List<LocationReview> locationReviews = locationReviewRepository.findByLocationId(location.getLocationId());
+        List<LocationReviewDTO> reviewDTOS = LocationReviewMapper.listToDTO(locationReviews);
+
+        LocationDetailResponse response = new LocationDetailResponse();
+        response.setName(location.getName());
+        response.setAddress(location.getAddress());
+        response.setFieldTypes(typeDTOS);
+        response.setReviews(reviewDTOS);
+
         return response;
     }
 }
