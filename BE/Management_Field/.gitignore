@@ -1,59 +1,78 @@
-HELP.md
-target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# ===================================================================
+# Ghi chú: File này được tạo ra bằng cách kết hợp và dọn dẹp
+# các quy tắc từ file gốc của bạn.
+# ===================================================================
 
-### STS ###
+### Logs ###
+logs/
+*.log
+
+### Environment Variables & Secrets ###
+# Không bao giờ commit các file chứa biến môi trường hoặc mật khẩu
+.env
+.env.local
+application-secret.properties
+application-*.yml
+src/main/resources/application-local.properties
+src/main/resources/application-dev.properties
+
+### IDE & Editor specific ###
+# IntelliJ
+.idea/
+shelf/
+*.iml
+*.ipr
+*.iws
+workspace.xml
+tasks.xml
+
+# Eclipse / STS
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
+.metadata
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
+# NetBeans
+nbproject/private/
+build-impl.xml
+nbbuild.xml
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
+# VS Code
 .vscode/
-# Build artifacts
+
+
+### Build output & Dependencies ###
+# Maven
 target/
+
+# Gradle
+.gradle/
 build/
+bin/
 out/
 
-# IDE files
-.idea/
-*.iml
-*.ipr
-*.iws
-.project
-.classpath
-.settings/
-*.DS_Store
+# Node.js
+node_modules/
 
-# Log files
-*.log
-logs/
+# OS generated files ###
+# macOS
+.DS_Store
 
-# Local env files
-.env
+# Packaged files
+*.jar
+*.war
+*.ear
 
-# Maven
+
+### Maven Generated ###
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -61,36 +80,3 @@ pom.xml.next
 release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
-
-# Gradle
-.gradle/
-build/
-!build/resources/
-!build/classes/
-bin/
-*.jar
-*.war
-*.ear
-
-# Secrets (ensure these are never committed)
-application-secret.properties
-application-*.yml
-src/main/resources/application-local.properties
-src/main/resources/application-dev.properties
-# Add any other files containing sensitive information
-
-# IntelliJ specific
-shelf/
-workspace.xml
-tasks.xml
-
-# Eclipse specific
-.metadata
-
-# NetBeans specific
-nbproject/private/
-build-impl.xml
-nbbuild.xml
-dist/
-nbdist/
-.nb-gradle/
