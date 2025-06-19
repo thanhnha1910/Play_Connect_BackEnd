@@ -20,6 +20,9 @@ public class Location {
     
     private String name;
     
+    @Column(unique = true, length = 255)
+    private String slug;
+    
     private String address;
     
     @Column(precision = 8, scale = 6)
@@ -31,4 +34,28 @@ public class Location {
     @ManyToOne
     @JoinColumn(name = "owner_id")
     private Owner owner;
+    
+    // Method để tự động tạo slug từ name
+    @PrePersist
+    @PreUpdate
+    public void generateSlug() {
+        if (this.name != null && (this.slug == null || this.slug.isEmpty())) {
+            this.slug = createSlugFromName(this.name);
+        }
+    }
+    
+    private String createSlugFromName(String name) {
+        return name.toLowerCase()
+                .replaceAll("[àáạảãâầấậẩẫăằắặẳẵ]", "a")
+                .replaceAll("[èéẹẻẽêềếệểễ]", "e")
+                .replaceAll("[ìíịỉĩ]", "i")
+                .replaceAll("[òóọỏõôồốộổỗơờớợởỡ]", "o")
+                .replaceAll("[ùúụủũưừứựửữ]", "u")
+                .replaceAll("[ỳýỵỷỹ]", "y")
+                .replaceAll("[đ]", "d")
+                .replaceAll("[^a-z0-9\\s-]", "")
+                .replaceAll("\\s+", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("^-|-$", "");
+    }
 }

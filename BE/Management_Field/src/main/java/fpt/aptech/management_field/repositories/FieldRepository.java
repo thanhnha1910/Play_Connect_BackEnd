@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -47,4 +48,13 @@ public interface FieldRepository extends JpaRepository<Field, Long>, JpaSpecific
 
     @Query(value = "SELECT f FROM Field f WHERE f.location.locationId = :locationId")
     List<Field> getFieldsByLocationId(@Param("locationId") Long locationId);
+
+
+    @Query("SELECT f FROM Field f WHERE f.isActive = true AND f.fieldId NOT IN " +
+            "(SELECT b.field.fieldId FROM Booking b WHERE (b.fromTime <= :toTime AND b.toTime >= :fromTime) AND b.status IN ('confirmed', 'pending')) " +
+            "AND (:locationId IS NULL OR f.location.locationId = :locationId)")
+    List<Field> findAvailableFields(@Param("fromTime") LocalDateTime fromTime,
+                                    @Param("toTime") LocalDateTime toTime,
+                                    @Param("locationId") Long locationId);
+
 }

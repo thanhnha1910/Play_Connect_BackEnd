@@ -4,10 +4,13 @@ import fpt.aptech.management_field.models.Field;
 import fpt.aptech.management_field.payload.response.FieldDetailResponse;
 import fpt.aptech.management_field.payload.response.FieldMapResponse;
 import fpt.aptech.management_field.repositories.FieldRepository;
+import fpt.aptech.management_field.repositories.BookingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -16,6 +19,9 @@ public class FieldService {
     
     @Autowired
     private FieldRepository fieldRepository;
+    
+    @Autowired
+    private BookingRepository bookingRepository;
     
     public List<FieldMapResponse> searchFieldsForMap(
             BigDecimal latitude, BigDecimal longitude, Double radiusKm,
@@ -113,5 +119,26 @@ public class FieldService {
         // TODO: Add operating hours and reviews
         
         return response;
+    }
+    
+    public List<Field> getAvailableFields(Instant fromTime, Instant toTime, Long locationId) {
+        List<Field> fields;
+        
+        // Get fields by location if locationId is provided, otherwise get all fields
+        if (locationId != null) {
+            fields = fieldRepository.getFieldsByLocationId(locationId);
+        } else {
+            fields = fieldRepository.findAll();
+        }
+        
+        // Filter out fields that have confirmed or pending bookings overlapping with the requested time
+        return fields.stream()
+            .filter(field -> !bookingRepository.existsByFieldAndFromTimeLessThanEqualAndToTimeGreaterThanEqual(
+                field, toTime, fromTime))
+            .collect(Collectors.toList());
+    }
+    
+    public List<Field> getAllFields() {
+        return fieldRepository.findAll();
     }
 }

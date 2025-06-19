@@ -5,7 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "bookings")
@@ -17,12 +19,17 @@ public class Booking {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "booking_id")
     private Long bookingId;
-    
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+
+
     @Column(name = "from_time")
-    private LocalDateTime fromTime;
+    private Instant fromTime;
     
     @Column(name = "to_time")
-    private LocalDateTime toTime;
+    private Instant toTime;
     
     private Integer slots;
     
@@ -31,4 +38,13 @@ public class Booking {
     @ManyToOne
     @JoinColumn(name = "field_id")
     private Field field;
+
+    @Column(name = "payment_token")
+    private String paymentToken;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @OneToMany(mappedBy = "booking", fetch = FetchType.LAZY)
+    private List<BookingUser> bookingUsers;
 }

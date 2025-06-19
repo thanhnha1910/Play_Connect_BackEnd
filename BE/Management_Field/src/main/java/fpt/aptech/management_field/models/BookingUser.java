@@ -22,7 +22,10 @@ public class BookingUser {
     
     @Column(name = "is_booker")
     private Boolean isBooker;
-    
+
+    @Column(name = "position")
+    private String position; // Vị trí chơi (VD: "GK", "DF")
+
     @ManyToOne
     @JoinColumn(name = "booking_id", insertable = false, updatable = false)
     private Booking booking;
