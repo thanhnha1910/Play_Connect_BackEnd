@@ -92,6 +92,10 @@ public class LocationController {
             );
             return ResponseEntity.ok(fields);
         } catch (RuntimeException e) {
+            System.out.println("=== CONTROLLER EXCEPTION DEBUG ===");
+            System.out.println("Exception in getLocationBySlug: " + e.getMessage());
+            e.printStackTrace();
+            System.out.println("=== END CONTROLLER EXCEPTION DEBUG ===");
             return ResponseEntity.notFound().build();
         }
     }
@@ -107,6 +111,9 @@ public class LocationController {
             @PathVariable String slug) {
         try {
             LocationDetailResponse locationDetail = locationService.getLocationDetail(slug);
+            if (locationDetail == null) {
+                return ResponseEntity.notFound().build();
+            }
             return ResponseEntity.ok(locationDetail);
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();

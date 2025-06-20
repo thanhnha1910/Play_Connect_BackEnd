@@ -1,7 +1,7 @@
-package fpt.aptech.management_field.security; // Hoặc package config của bạn
+package fpt.aptech.management_field.security;
 
 import fpt.aptech.management_field.security.jwt.AuthEntryPointJwt;
-import fpt.aptech.management_field.security.jwt.AuthTokenFilter;
+import fpt.aptech.management_field.security.jwt.AuthTokenFilter; // Đảm bảo import đúng
 import fpt.aptech.management_field.security.services.UserDetailsServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -11,8 +11,9 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer; // Import này quan trọng
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -32,10 +33,12 @@ public class WebSecurityConfig {
     @Autowired
     private AuthEntryPointJwt unauthorizedHandler;
 
-    @Bean
-    public AuthTokenFilter authenticationJwtTokenFilter() {
-        return new AuthTokenFilter();
-    }
+    // ✅ ĐÃ THAY ĐỔI: Tiêm (Inject) AuthTokenFilter đã được đánh dấu @Component
+    @Autowired
+    private AuthTokenFilter authTokenFilter;
+
+    // ❌ ĐÃ XÓA: Phương thức @Bean tạo AuthTokenFilter đã được xóa bỏ
+    // vì filter của chúng ta giờ đã là một Spring Bean.
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -58,12 +61,12 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*")); // Allow all origins
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
@@ -72,8 +75,8 @@ public class WebSecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Enable CORS with custom configuration
-                .csrf(AbstractHttpConfigurer::disable) // Vô hiệu hóa CSRF
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(unauthorizedHandler)
                 )
@@ -82,26 +85,34 @@ public class WebSecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/oauth2/**").permitAll()
+                        .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/api/fields/**").permitAll()
                         .requestMatchers("/api/locations/**").permitAll()
-                        // Swagger UI and API Docs endpoints - Updated
+                        // PayPal specific endpoints that need to be public
+                        .requestMatchers("/api/booking/payment-callback").permitAll() // PayPal callback
+                        .requestMatchers("/api/booking/payment-cancel").permitAll() // PayPal cancel
+                        .requestMatchers("/api/booking/success").permitAll() // PayPal success redirect
+                        .requestMatchers("/api/booking/confirm").permitAll() // Payment confirmation
+                        .requestMatchers("/api/booking/paypal/capture").permitAll() // Public PayPal capture endpoint
+                        // Allow GET requests to booking endpoints for viewing bookings
+                        .requestMatchers(HttpMethod.GET, "/api/booking/**").permitAll()
+                        // All other booking endpoints require authentication (including POST /api/booking)
+                        .requestMatchers("/api/booking/**").authenticated() // Other booking endpoints require authentication
+                        .requestMatchers("/api/bookings/**").authenticated() // Bookings endpoints require authentication
                         .requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/swagger-ui/index.html",
-                                "/v3/api-docs/**",
-                                "/api-docs/**",
-                                "/swagger-resources/**",
-                                "/webjars/**",
-                                "/configuration/ui",
-                                "/configuration/security",
-                                "/swagger-ui.html/**"
+                                "/v3/api-docs/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 );
 
         http.authenticationProvider(authenticationProvider());
-        http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        // Add the JWT filter to the security chain
+        // The filter's shouldNotFilter method will handle skipping public endpoints
+        http.addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

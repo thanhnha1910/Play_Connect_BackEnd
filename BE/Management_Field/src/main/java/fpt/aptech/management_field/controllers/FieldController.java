@@ -30,6 +30,17 @@ public class FieldController {
     @Autowired
     private GeocodingService geocodingService;
 
+    @GetMapping
+    @Operation(summary = "Get all fields", description = "Retrieve a list of all available fields")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved fields list"),
+        @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<List<Field>> getAllFields() {
+        List<Field> fields = fieldService.getAllFields();
+        return ResponseEntity.ok(fields);
+    }
+
 //   @GetMapping("/map-search")
 //    @Operation(summary = "Search fields on map", description = "Search for fields based on location and filters")
 //    @ApiResponses(value = {

@@ -22,7 +22,7 @@ public class User {
     @Column(nullable = false, unique = true)
     private String username;
     
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
     
     @Column(nullable = false, unique = true)
@@ -38,6 +38,16 @@ public class User {
     
     @Column(name = "profile_picture")
     private String profilePicture;
+    
+    @Column(name = "image_url")
+    private String imageUrl;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider")
+    private AuthProvider provider;
+    
+    @Column(name = "provider_id")
+    private String providerId;
     
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;

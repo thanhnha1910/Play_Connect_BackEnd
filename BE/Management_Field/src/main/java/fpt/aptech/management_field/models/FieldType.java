@@ -1,9 +1,12 @@
 package fpt.aptech.management_field.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 @Entity
 @Table(name = "field_types")
@@ -23,4 +26,8 @@ public class FieldType {
     
     @Column(name = "max_capacity")
     private Integer maxCapacity;
+
+    @OneToMany(mappedBy = "type")
+    @JsonIgnore
+    private List<Field> fields;
 }

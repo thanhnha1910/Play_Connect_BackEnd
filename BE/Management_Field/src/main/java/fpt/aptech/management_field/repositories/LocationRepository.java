@@ -56,6 +56,16 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
     @Query("SELECT MIN(f.hourlyRate) FROM Field f WHERE f.location.locationId = :locationId")
     Integer getMinimumHourlyRateByLocationId(@Param("locationId") Long locationId);
 
-    @Query(value = "SELECT l FROM Location l WHERE LOWER(REPLACE(l.name, ' ', '-')) = :slug ORDER BY l.locationId LIMIT 1")
+    @Query("SELECT l FROM Location l WHERE l.slug = :slug")
     Location getLocationBySlug(@Param("slug") String slug);
+    
+    @Query("SELECT l FROM Location l WHERE LOWER(l.slug) = LOWER(:slug)")
+    Location getLocationBySlugIgnoreCase(@Param("slug") String slug);
+    
+    @Query(value = "SELECT * FROM locations WHERE slug = :slug", nativeQuery = true)
+    Location getLocationBySlugNative(@Param("slug") String slug);
+    
+    @Query("SELECT l FROM Location l")
+    List<Location> findAllLocations();
+   
 }

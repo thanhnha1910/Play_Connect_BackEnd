@@ -29,24 +29,31 @@ public class RefreshTokenService {
         return refreshTokenRepository.findByToken(token);
     }
     
+    /**
+     * Creates a new refresh token for the user.
+     * Implements "Clean then Create" strategy to handle unique constraint on user_id.
+     * This ensures only one active refresh token per user at any time.
+     * 
+     * @param userId The ID of the user
+     * @return The newly created refresh token
+     */
+    @Transactional
     public RefreshToken createRefreshToken(Long userId) {
-        RefreshToken refreshToken = new RefreshToken();
-        
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
         
-        // Check if user already has a refresh token
-        refreshTokenRepository.findAll().stream()
-                .filter(token -> token.getUser().getId().equals(userId))
-                .findFirst()
-                .ifPresent(token -> refreshTokenRepository.delete(token));
+        // Step 1: Clean - Delete any existing refresh tokens for this user
+        // This prevents DataIntegrityViolationException due to unique constraint on user_id
+        refreshTokenRepository.deleteByUser(user);
+        refreshTokenRepository.flush(); // Force immediate execution of delete operation
         
+        // Step 2: Create - Generate new refresh token
+        RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
         refreshToken.setToken(UUID.randomUUID().toString());
         
-        refreshToken = refreshTokenRepository.save(refreshToken);
-        return refreshToken;
+        return refreshTokenRepository.save(refreshToken);
     }
     
     public RefreshToken verifyExpiration(RefreshToken token) {

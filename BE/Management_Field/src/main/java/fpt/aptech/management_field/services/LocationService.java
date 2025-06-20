@@ -5,6 +5,7 @@ import fpt.aptech.management_field.models.Field;
 import fpt.aptech.management_field.models.FieldType;
 import fpt.aptech.management_field.models.Location;
 import fpt.aptech.management_field.models.LocationReview;
+import fpt.aptech.management_field.payload.dtos.BookingDTO;
 import fpt.aptech.management_field.payload.dtos.FieldDTO;
 import fpt.aptech.management_field.payload.dtos.FieldTypeDTO;
 import fpt.aptech.management_field.payload.dtos.LocationReviewDTO;
@@ -12,6 +13,7 @@ import fpt.aptech.management_field.payload.response.FieldSummaryResponse;
 import fpt.aptech.management_field.payload.response.LocationCardResponse;
 import fpt.aptech.management_field.payload.response.LocationDetailResponse;
 import fpt.aptech.management_field.payload.response.LocationMapResponse;
+import fpt.aptech.management_field.repositories.BookingRepository;
 import fpt.aptech.management_field.repositories.FieldRepository;
 import fpt.aptech.management_field.repositories.LocationRepository;
 import fpt.aptech.management_field.repositories.LocationReviewRepository;
@@ -20,6 +22,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -35,6 +40,12 @@ public class LocationService {
 
     @Autowired
     private LocationReviewRepository locationReviewRepository;
+    
+    @Autowired
+    private BookingRepository bookingRepository;
+    
+    @Autowired
+    private BookingService bookingService;
 
     public List<LocationMapResponse> searchLocationsForMap(BigDecimal latitude,
                                                            BigDecimal longitude,
@@ -180,41 +191,118 @@ public class LocationService {
     }
 
     public LocationDetailResponse getLocationDetail(String locationSlug) {
+        System.out.println("=== LOCATION SEARCH DEBUG ===");
+        System.out.println("Searching for location with slug: " + locationSlug);
+        
+        // Try exact match first
         Location location = locationRepository.getLocationBySlug(locationSlug);
+        System.out.println("Exact match result: " + (location != null ? "Found - " + location.getName() : "Not found"));
+        
         if (location == null) {
+            // Try case-insensitive search
+            System.out.println("Trying case-insensitive search...");
+            location = locationRepository.getLocationBySlugIgnoreCase(locationSlug);
+            System.out.println("Case-insensitive match result: " + (location != null ? "Found - " + location.getName() : "Not found"));
+        }
+        
+        if (location == null) {
+            // Try native SQL query
+            System.out.println("Trying native SQL query...");
+            location = locationRepository.getLocationBySlugNative(locationSlug);
+            System.out.println("Native SQL match result: " + (location != null ? "Found - " + location.getName() : "Not found"));
+        }
+        
+        if (location == null) {
+            // Debug: List all locations
+            System.out.println("Location not found. Listing all available locations:");
+            List<Location> allLocations = locationRepository.findAllLocations();
+            System.out.println("Total locations in database: " + allLocations.size());
+            for (Location loc : allLocations) {
+                System.out.println("Available slug: '" + loc.getSlug() + "' - Name: " + loc.getName());
+            }
+            System.out.println("=== END DEBUG ===");
             return null;
         }
-        List<Field> locationFields = fieldRepository.getFieldsByLocationId(location.getLocationId());
-        Map<FieldType, List<Field>> groupedByType = locationFields.stream()
-                .collect(Collectors.groupingBy(Field::getType));
-        List<FieldTypeDTO> typeDTOS = groupedByType.entrySet().stream()
-                .map(entry -> {
-                    FieldType type = entry.getKey();
-                    List<FieldDTO> fieldDTOs = entry.getValue().stream()
-                            .map(field -> new FieldDTO(
-                                    field.getFieldId(),
-                                    field.getName(),
-                                    field.getDescription(),
-                                    field.getHourlyRate()
-                            ))
-                            .collect(Collectors.toList());
+        
+        System.out.println("Location found successfully: " + location.getName());
+        System.out.println("=== END DEBUG ===");
+        
+        try {
+            System.out.println("Starting to build response...");
+            List<Field> locationFields = fieldRepository.getFieldsByLocationId(location.getLocationId());
+            System.out.println("Found " + locationFields.size() + " fields for location");
+            
+            Map<FieldType, List<Field>> groupedByType = locationFields.stream()
+                    .collect(Collectors.groupingBy(Field::getType));
+            System.out.println("Grouped fields by " + groupedByType.size() + " types");
+            
+            List<FieldTypeDTO> typeDTOS = groupedByType.entrySet().stream()
+                    .map(entry -> {
+                        FieldType type = entry.getKey();
+                        List<FieldDTO> fieldDTOs = entry.getValue().stream()
+                                .map(field -> {
+                                    try {
+                                        // Get current date and next 7 days for booking data
+                                        LocalDateTime startDate = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
+                                        LocalDateTime endDate = startDate.plusDays(7).withHour(23).withMinute(59).withSecond(59);
+                                        
+                                        // Convert to Instant for the service call
+                                        Instant startInstant = startDate.atZone(ZoneId.systemDefault()).toInstant();
+                                        Instant endInstant = endDate.atZone(ZoneId.systemDefault()).toInstant();
+                                        
+                                        // Fetch bookings for this field
+                                        List<BookingDTO> fieldBookings = bookingService.getBookingsByDate(startInstant, endInstant, field.getFieldId());
+                                        
+                                        // Create FieldDTO with bookings
+                                        FieldDTO fieldDTO = new FieldDTO(
+                                                field.getFieldId(),
+                                                field.getName(),
+                                                field.getDescription(),
+                                                field.getHourlyRate()
+                                        );
+                                        fieldDTO.setBookings(fieldBookings);
+                                        return fieldDTO;
+                                    } catch (Exception e) {
+                                        System.out.println("Error processing field " + field.getFieldId() + ": " + e.getMessage());
+                                        e.printStackTrace();
+                                        throw new RuntimeException("Error processing field", e);
+                                    }
+                                })
+                                .collect(Collectors.toList());
 
-                    return new FieldTypeDTO(
-                            type.getName(),
-                            type.getTeamCapacity(),
-                            type.getMaxCapacity(),
-                            fieldDTOs
-                    );
-                }).toList();
-        List<LocationReview> locationReviews = locationReviewRepository.findByLocationId(location.getLocationId());
-        List<LocationReviewDTO> reviewDTOS = LocationReviewMapper.listToDTO(locationReviews);
+                        return new FieldTypeDTO(
+                                type.getName(),
+                                type.getTeamCapacity(),
+                                type.getMaxCapacity(),
+                                fieldDTOs
+                        );
+                    }).toList();
+            
+            System.out.println("Created " + typeDTOS.size() + " field type DTOs");
+            
+            List<LocationReview> locationReviews = locationReviewRepository.findByLocationId(location.getLocationId());
+            List<LocationReviewDTO> reviewDTOS = LocationReviewMapper.listToDTO(locationReviews);
+            System.out.println("Found " + reviewDTOS.size() + " reviews");
 
-        LocationDetailResponse response = new LocationDetailResponse();
-        response.setName(location.getName());
-        response.setAddress(location.getAddress());
-        response.setFieldTypes(typeDTOS);
-        response.setReviews(reviewDTOS);
+            LocationDetailResponse response = new LocationDetailResponse();
+            response.setName(location.getName());
+            response.setAddress(location.getAddress());
+            response.setFieldTypes(typeDTOS);
+            response.setReviews(reviewDTOS);
+            
+            System.out.println("=== RESPONSE DEBUG ===");
+            System.out.println("Response created with name: " + response.getName());
+            System.out.println("Response address: " + response.getAddress());
+            System.out.println("Field types count: " + (response.getFieldTypes() != null ? response.getFieldTypes().size() : "null"));
+            System.out.println("Reviews count: " + (response.getReviews() != null ? response.getReviews().size() : "null"));
+            System.out.println("Response object: " + (response != null ? "not null" : "null"));
+            System.out.println("=== END RESPONSE DEBUG ===");
 
-        return response;
+            return response;
+        } catch (Exception e) {
+            System.out.println("ERROR in getLocationDetail: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to build location detail response", e);
+        }
     }
 }

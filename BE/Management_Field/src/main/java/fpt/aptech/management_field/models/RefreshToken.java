@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Entity
-@Table(name = "refresh_tokens")
+@Table(name = "refresh_tokens", 
+       uniqueConstraints = {
+           @UniqueConstraint(columnNames = "user_id")
+       })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,7 +20,7 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
     

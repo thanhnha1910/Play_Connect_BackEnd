@@ -13,6 +13,17 @@ public class BookingMapper {
         bookingDTO.setToTime(booking.getToTime());
         bookingDTO.setSlots(booking.getSlots());
         bookingDTO.setStatus(booking.getStatus());
+        
+        // Set customer information if booking has users
+        if (booking.getBookingUsers() != null && !booking.getBookingUsers().isEmpty()) {
+            var firstUser = booking.getBookingUsers().iterator().next().getUser();
+            bookingDTO.setCustomerName(firstUser.getFullName());
+            bookingDTO.setCustomerPhone(firstUser.getPhoneNumber());
+        }
+        
+        // Set isBooked based on status (both confirmed and pending are considered booked)
+        bookingDTO.setBooked("CONFIRMED".equals(booking.getStatus()) || "PENDING".equals(booking.getStatus()));
+        
         return bookingDTO;
     }
 
