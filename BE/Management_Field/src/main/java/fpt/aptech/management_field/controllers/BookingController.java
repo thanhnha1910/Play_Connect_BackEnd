@@ -42,8 +42,6 @@ public class BookingController {
     @Autowired
     private FieldService fieldService;
 
-
-    
     @Autowired
     private PayPalPaymentService payPalPaymentService;
 
@@ -52,6 +50,7 @@ public class BookingController {
         List<BookingDTO> bookingDTOS = bookingService.getBookingsByDate(fromDate, toDate, fieldId);
         return ResponseEntity.ok(bookingDTOS);
     }
+
     @GetMapping("/available-fields")
     public ResponseEntity<?> getAvailableFields(
             @RequestParam Instant fromTime,

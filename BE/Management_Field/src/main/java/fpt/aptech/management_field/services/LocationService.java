@@ -194,7 +194,7 @@ public class LocationService {
         System.out.println("=== LOCATION SEARCH DEBUG ===");
         System.out.println("Searching for location with slug: " + locationSlug);
         
-        // Try exact match first
+        // Try the exact match first
         Location location = locationRepository.getLocationBySlug(locationSlug);
         System.out.println("Exact match result: " + (location != null ? "Found - " + location.getName() : "Not found"));
         
@@ -242,14 +242,14 @@ public class LocationService {
                         List<FieldDTO> fieldDTOs = entry.getValue().stream()
                                 .map(field -> {
                                     try {
-                                        // Get current date and next 7 days for booking data
+                                        // Get the current date and next 7 days for booking data
                                         LocalDateTime startDate = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
                                         LocalDateTime endDate = startDate.plusDays(7).withHour(23).withMinute(59).withSecond(59);
-                                        
+
                                         // Convert to Instant for the service call
                                         Instant startInstant = startDate.atZone(ZoneId.systemDefault()).toInstant();
                                         Instant endInstant = endDate.atZone(ZoneId.systemDefault()).toInstant();
-                                        
+
                                         // Fetch bookings for this field
                                         List<BookingDTO> fieldBookings = bookingService.getBookingsByDate(startInstant, endInstant, field.getFieldId());
                                         

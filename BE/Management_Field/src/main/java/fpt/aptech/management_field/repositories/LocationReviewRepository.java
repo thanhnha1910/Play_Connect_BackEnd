@@ -10,4 +10,7 @@ import java.util.List;
 public interface LocationReviewRepository extends JpaRepository<LocationReview, Long> {
     @Query(value = "SELECT lr FROM LocationReview lr WHERE lr.location.locationId = :locationId")
     List<LocationReview> findByLocationId(@Param("locationId") Long locationId);
+
+    @Query(value = "SELECT lr FROM LocationReview lr WHERE lr.location.slug = :slug")
+    List<LocationReview> findByLocationSlug(String slug);
 }
