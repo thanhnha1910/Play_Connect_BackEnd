@@ -1,0 +1,82 @@
+# ===================================================================
+# Ghi chú: File này được tạo ra bằng cách kết hợp và dọn dẹp
+# các quy tắc từ file gốc của bạn.
+# ===================================================================
+
+### Logs ###
+logs/
+*.log
+
+### Environment Variables & Secrets ###
+# Không bao giờ commit các file chứa biến môi trường hoặc mật khẩu
+.env
+.env.local
+application-secret.properties
+application-*.yml
+src/main/resources/application-local.properties
+src/main/resources/application-dev.properties
+
+### IDE & Editor specific ###
+# IntelliJ
+.idea/
+shelf/
+*.iml
+*.ipr
+*.iws
+workspace.xml
+tasks.xml
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+.metadata
+
+# NetBeans
+nbproject/private/
+build-impl.xml
+nbbuild.xml
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+
+
+### Build output & Dependencies ###
+# Maven
+target/
+
+# Gradle
+.gradle/
+build/
+bin/
+out/
+
+# Node.js
+node_modules/
+
+# OS generated files ###
+# macOS
+.DS_Store
+
+# Packaged files
+*.jar
+*.war
+*.ear
+
+
+### Maven Generated ###
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
