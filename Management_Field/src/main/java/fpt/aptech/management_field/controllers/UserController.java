@@ -43,7 +43,8 @@ public class UserController {
             response.put("phoneNumber", user.getPhoneNumber());
             response.put("address", user.getAddress());
             response.put("profilePicture", user.getProfilePicture());
-            
+            response.put("bookingCount", user.getBookingCount());
+            response.put("memberLevel", user.getMemberLevel());
             return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.badRequest().body(new MessageResponse("User not found"));

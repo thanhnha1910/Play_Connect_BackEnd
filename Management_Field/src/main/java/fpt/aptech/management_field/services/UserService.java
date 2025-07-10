@@ -53,7 +53,22 @@ public class UserService {
         // Save and flush changes immediately
         return Optional.of(userRepository.saveAndFlush(user));
     }
-    
+    public int calculateLevel(int bookingCount) {
+        if (bookingCount >= 200) return 10;
+        if (bookingCount >= 150) return 9;
+        if (bookingCount >= 100) return 8;
+        if (bookingCount >= 75) return 7;
+        if (bookingCount >= 50) return 6;
+        if (bookingCount >= 35) return 5;
+        if (bookingCount >= 20) return 4;
+        if (bookingCount >= 10) return 3;
+        if (bookingCount >= 5) return 2;
+        return 1;
+    }
+
+    public int getDiscountPercent(int level) {
+        return level * 2; // mỗi cấp giảm 2%
+    }
     /**
      * Generate a new verification token for a user
      * 

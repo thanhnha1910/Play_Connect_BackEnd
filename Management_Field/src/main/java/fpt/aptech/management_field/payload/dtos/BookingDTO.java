@@ -17,4 +17,10 @@ public class BookingDTO {
     private String customerName;
     private String customerPhone;
     private boolean isBooked;
+
+    private int basePrice;
+    private int discountPercent;
+    private int discountAmount;
+    private int totalPrice;
+
 }

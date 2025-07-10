@@ -217,14 +217,9 @@ public class BookingController {
             @RequestParam(required = false) String bookingId) {
         try {
             // Capture the payment and update booking status
-            Booking booking = bookingService.handlePaymentCallback(token, PayerID, bookingId);
-            
-            // Redirect to success page
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "booking", booking,
-                "message", "Payment completed successfully"
-            ));
+            Map<String, Object> result = bookingService.handlePaymentCallback(token, PayerID, bookingId);
+            return ResponseEntity.ok(result);
+
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
                 "status", "error",
