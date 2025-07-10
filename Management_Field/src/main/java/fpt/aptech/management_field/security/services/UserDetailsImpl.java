@@ -2,7 +2,6 @@ package fpt.aptech.management_field.security.services;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import fpt.aptech.management_field.models.User;
-import fpt.aptech.management_field.models.UserStatus;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,7 +18,7 @@ public class UserDetailsImpl implements UserDetails {
     private String username;
     private String email;
     private String fullName;
-    private UserStatus status;
+    private User.UserStatus status;
     
     @JsonIgnore
     private String password;
@@ -27,7 +26,7 @@ public class UserDetailsImpl implements UserDetails {
     private Collection<? extends GrantedAuthority> authorities;
 
     public UserDetailsImpl(Long id, String username, String email, String password, String fullName,
-                           UserStatus status, Collection<? extends GrantedAuthority> authorities) {
+                           User.UserStatus status, Collection<? extends GrantedAuthority> authorities) {
         this.id = id;
         this.username = username;
         this.email = email;
@@ -69,7 +68,7 @@ public class UserDetailsImpl implements UserDetails {
         return fullName;
     }
     
-    public UserStatus getStatus() {
+    public User.UserStatus getStatus() {
         return status;
     }
 
@@ -101,7 +100,7 @@ public class UserDetailsImpl implements UserDetails {
     @Override
     public boolean isEnabled() {
         // User is enabled only if status is ACTIVE
-        return status == UserStatus.ACTIVE;
+        return status == User.UserStatus.ACTIVE;
     }
 
     @Override

@@ -1,14 +1,9 @@
 package fpt.aptech.management_field.services;
 
-import fpt.aptech.management_field.models.ERole;
-import fpt.aptech.management_field.models.Location;
-import fpt.aptech.management_field.models.Owner;
-import fpt.aptech.management_field.models.User;
-import fpt.aptech.management_field.models.UserStatus;
+import fpt.aptech.management_field.models.*;
 import fpt.aptech.management_field.payload.dtos.OwnerAnalyticsDto;
 import fpt.aptech.management_field.payload.dtos.OwnerSummaryDto;
 import fpt.aptech.management_field.payload.dtos.PendingOwnerDto;
-import fpt.aptech.management_field.payload.dtos.RecentActivityDto;
 import fpt.aptech.management_field.payload.response.AdminStatsResponse;
 import fpt.aptech.management_field.repositories.BookingRepository;
 import fpt.aptech.management_field.repositories.FieldRepository;
@@ -25,9 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -52,11 +45,11 @@ public class AdminService {
     private OwnerRepository ownerRepository;
 
     public List<User> getPendingOwners() {
-        return userRepository.findByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
+        return userRepository.findByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.PENDING_APPROVAL);
     }
     
     public List<PendingOwnerDto> getPendingOwnerRequests() {
-        List<User> pendingUsers = userRepository.findByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
+        List<User> pendingUsers = userRepository.findByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.PENDING_APPROVAL);
         
         return pendingUsers.stream()
                 .map(user -> {
@@ -86,17 +79,17 @@ public class AdminService {
         
         // Check if user has OWNER role
         boolean hasOwnerRole = user.getRoles().stream()
-                .anyMatch(role -> role.getName() == ERole.ROLE_OWNER);
+                .anyMatch(role -> role.getName() == Role.ERole.ROLE_OWNER);
         
         if (!hasOwnerRole) {
             throw new RuntimeException("User is not an owner!");
         }
 
-        if (user.getStatus() != UserStatus.PENDING_APPROVAL) {
+        if (user.getStatus() != User.UserStatus.PENDING_APPROVAL) {
             throw new RuntimeException("User is not in pending approval status!");
         }
 
-        user.setStatus(UserStatus.ACTIVE);
+        user.setStatus(User.UserStatus.ACTIVE);
         User savedUser = userRepository.save(user);
         
         // Send approval notification email using the new dedicated method
@@ -121,13 +114,13 @@ public class AdminService {
         
         // Check if user has OWNER role
         boolean hasOwnerRole = user.getRoles().stream()
-                .anyMatch(role -> role.getName() == ERole.ROLE_OWNER);
+                .anyMatch(role -> role.getName() == Role.ERole.ROLE_OWNER);
         
         if (!hasOwnerRole) {
             throw new RuntimeException("User is not an owner!");
         }
 
-        user.setStatus(UserStatus.SUSPENDED);
+        user.setStatus(User.UserStatus.SUSPENDED);
         return userRepository.save(user);
     }
 
@@ -142,17 +135,17 @@ public class AdminService {
         
         // Check if user has OWNER role
         boolean hasOwnerRole = user.getRoles().stream()
-                .anyMatch(role -> role.getName() == ERole.ROLE_OWNER);
+                .anyMatch(role -> role.getName() == Role.ERole.ROLE_OWNER);
         
         if (!hasOwnerRole) {
             throw new RuntimeException("User is not an owner!");
         }
 
-        if (user.getStatus() != UserStatus.PENDING_APPROVAL) {
+        if (user.getStatus() != User.UserStatus.PENDING_APPROVAL) {
             throw new RuntimeException("User is not in pending approval status!");
         }
 
-        user.setStatus(UserStatus.REJECTED);
+        user.setStatus(User.UserStatus.REJECTED);
         User savedUser = userRepository.save(user);
         
         // Send rejection notification email
@@ -172,16 +165,16 @@ public class AdminService {
 
     public AdminStatsResponse getDashboardStats() {
         // Count pending owners
-        long pendingOwnersCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
+        long pendingOwnersCount = userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.PENDING_APPROVAL);
         
         // Count total users
         long totalUsersCount = userRepository.count();
         
         // Count active owners
-        long activeOwnersCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.ACTIVE);
+        long activeOwnersCount = userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.ACTIVE);
         
         // Count suspended users
-        long suspendedUsersCount = userRepository.countByStatus(UserStatus.SUSPENDED);
+        long suspendedUsersCount = userRepository.countByStatus(User.UserStatus.SUSPENDED);
         
         // Count total fields
         long totalFieldsCount = fieldRepository.count();
@@ -219,7 +212,7 @@ public class AdminService {
         
         if (status != null && !status.trim().isEmpty()) {
             try {
-                UserStatus userStatus = UserStatus.valueOf(status.trim().toUpperCase());
+                User.UserStatus userStatus = User.UserStatus.valueOf(status.trim().toUpperCase());
                 spec = spec.and(hasStatus(userStatus));
             } catch (IllegalArgumentException e) {
                 // Invalid status, ignore filter
@@ -244,13 +237,13 @@ public class AdminService {
     }
     
     public OwnerAnalyticsDto getOwnerAnalytics() {
-        long totalOwners = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.ACTIVE) +
-                          userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL) +
-                          userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.SUSPENDED);
+        long totalOwners = userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.ACTIVE) +
+                          userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.PENDING_APPROVAL) +
+                          userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.SUSPENDED);
         
-        long activeOwners = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.ACTIVE);
-        long pendingApprovalCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
-        long suspendedCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.SUSPENDED);
+        long activeOwners = userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.ACTIVE);
+        long pendingApprovalCount = userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.PENDING_APPROVAL);
+        long suspendedCount = userRepository.countByRoles_NameAndStatus(Role.ERole.ROLE_OWNER, User.UserStatus.SUSPENDED);
         
         // For now, we'll return basic analytics without recent activities
         // You can extend this later to include recent activities
@@ -262,7 +255,7 @@ public class AdminService {
         return (root, query, criteriaBuilder) -> {
             return criteriaBuilder.equal(
                 root.join("roles").get("name"), 
-                ERole.ROLE_OWNER
+                Role.ERole.ROLE_OWNER
             );
         };
     }
@@ -277,7 +270,7 @@ public class AdminService {
         };
     }
     
-    private Specification<User> hasStatus(UserStatus status) {
+    private Specification<User> hasStatus(User.UserStatus status) {
         return (root, query, criteriaBuilder) -> {
             return criteriaBuilder.equal(root.get("status"), status);
         };

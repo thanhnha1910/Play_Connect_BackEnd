@@ -8,15 +8,16 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RecruitmentParticipant {
-      @Id
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String message;
 
-    @Column(nullable = true)
+    @Column(name = "is_accepted")
     private Boolean isAccepted;
 
+    @Column(name = "number_of_people")
     private Integer numberOfPeople;
 
     @ManyToOne

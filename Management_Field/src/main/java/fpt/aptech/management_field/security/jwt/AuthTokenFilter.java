@@ -109,7 +109,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 logger.info("=== No valid JWT token found for: {} {} ===", method, path);
             }
         } catch (Exception e) {
-            logger.error("Cannot set user authentication: {}", e);
+            logger.error("Cannot set user authentication: {}", e.getMessage());
         }
 
         logger.info("=== Proceeding with filter chain for: {} {} ===", method, path);

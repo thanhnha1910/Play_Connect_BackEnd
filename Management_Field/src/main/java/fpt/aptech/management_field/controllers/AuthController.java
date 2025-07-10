@@ -1,11 +1,9 @@
 package fpt.aptech.management_field.controllers;
 
     import fpt.aptech.management_field.exception.TokenRefreshException;
-    import fpt.aptech.management_field.models.ERole;
     import fpt.aptech.management_field.models.RefreshToken;
     import fpt.aptech.management_field.models.Role;
     import fpt.aptech.management_field.models.User;
-    import fpt.aptech.management_field.models.UserStatus;
     import fpt.aptech.management_field.payload.request.ForgotPasswordRequest;
     import fpt.aptech.management_field.payload.request.LoginRequest;
     import fpt.aptech.management_field.payload.request.OAuth2Request;
@@ -33,6 +31,7 @@ package fpt.aptech.management_field.controllers;
     import org.springframework.security.authentication.AuthenticationManager;
     import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
     import org.springframework.security.core.Authentication;
+    import org.springframework.security.core.GrantedAuthority;
     import org.springframework.security.core.context.SecurityContextHolder;
     import org.springframework.security.crypto.password.PasswordEncoder;
     import org.springframework.web.bind.annotation.*;
@@ -126,13 +125,13 @@ package fpt.aptech.management_field.controllers;
             
             // Check user status
             User user = userOptional.get();
-            if (user.getStatus() == UserStatus.PENDING_APPROVAL) {
+            if (user.getStatus() == User.UserStatus.PENDING_APPROVAL) {
                 return ResponseEntity
                         .status(HttpStatus.FORBIDDEN)
                         .body(new MessageResponse("Error: Tài khoản đang chờ phê duyệt. Vui lòng chờ Quản trị viên xét duyệt."));
             }
             
-            if (user.getStatus() == UserStatus.SUSPENDED) {
+            if (user.getStatus() == User.UserStatus.SUSPENDED) {
                 return ResponseEntity
                         .status(HttpStatus.FORBIDDEN)
                         .body(new MessageResponse("Error: Tài khoản đã bị tạm ngưng. Vui lòng liên hệ quản trị viên."));
@@ -146,7 +145,7 @@ package fpt.aptech.management_field.controllers;
 
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             List<String> roles = userDetails.getAuthorities().stream()
-                    .map(item -> item.getAuthority())
+                    .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
 
             // Get user status
@@ -197,24 +196,24 @@ package fpt.aptech.management_field.controllers;
             Set<Role> roles = new HashSet<>();
 
             if (strRoles == null) {
-                Role userRole = roleRepository.findByName(ERole.ROLE_USER)
+                Role userRole = roleRepository.findByName(Role.ERole.ROLE_USER)
                         .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
                 roles.add(userRole);
             } else {
                 strRoles.forEach(role -> {
                     switch (role) {
                         case "admin":
-                            Role adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
+                            Role adminRole = roleRepository.findByName(Role.ERole.ROLE_ADMIN)
                                     .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
                             roles.add(adminRole);
                             break;
                         case "owner":
-                            Role modRole = roleRepository.findByName(ERole.ROLE_OWNER)
+                            Role modRole = roleRepository.findByName(Role.ERole.ROLE_OWNER)
                                     .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
                             roles.add(modRole);
                             break;
                         default:
-                            Role userRole = roleRepository.findByName(ERole.ROLE_USER)
+                            Role userRole = roleRepository.findByName(Role.ERole.ROLE_USER)
                                     .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
                             roles.add(userRole);
                     }

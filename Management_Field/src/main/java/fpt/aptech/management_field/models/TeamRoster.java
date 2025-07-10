@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
+
 @Entity
 @Table(name = "team_rosters")
 @Data
@@ -33,3 +35,4 @@ public class TeamRoster {
     @JoinColumn(name = "user_id", insertable = false, updatable = false)
     private User user;
 }
+

@@ -1,8 +1,7 @@
 package fpt.aptech.management_field.repositories;
 
-import fpt.aptech.management_field.models.ERole;
+import fpt.aptech.management_field.models.Role;
 import fpt.aptech.management_field.models.User;
-import fpt.aptech.management_field.models.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -24,9 +23,9 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     
     Optional<User> findByVerificationToken(String token);
     
-    List<User> findByRoles_NameAndStatus(ERole roleName, UserStatus status);
+    List<User> findByRoles_NameAndStatus(Role.ERole roleName, User.UserStatus status);
     
-    Long countByRoles_NameAndStatus(ERole roleName, UserStatus status);
+    Long countByRoles_NameAndStatus(Role.ERole roleName, User.UserStatus status);
     
-    Long countByStatus(UserStatus status);
+    Long countByStatus(User.UserStatus status);
 }

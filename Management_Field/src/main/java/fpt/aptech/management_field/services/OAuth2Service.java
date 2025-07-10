@@ -2,8 +2,6 @@ package fpt.aptech.management_field.services;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fpt.aptech.management_field.models.AuthProvider;
-import fpt.aptech.management_field.models.ERole;
 import fpt.aptech.management_field.models.RefreshToken;
 import fpt.aptech.management_field.models.Role;
 import fpt.aptech.management_field.models.User;
@@ -285,8 +283,8 @@ public class OAuth2Service {
                 user.setFullName(name);
             }
             // Update provider info if it was a local account
-            if (user.getProvider() == null || user.getProvider() == AuthProvider.LOCAL) {
-                user.setProvider(AuthProvider.valueOf(provider.toUpperCase()));
+            if (user.getProvider() == null || user.getProvider() == User.AuthProvider.LOCAL) {
+                user.setProvider(User.AuthProvider.valueOf(provider.toUpperCase()));
                 user.setProviderId(providerId);
             }
         } else {
@@ -296,7 +294,7 @@ public class OAuth2Service {
             user.setFullName(name);
             user.setUsername(email); // Use email as username for OAuth2 users
             user.setImageUrl(imageUrl);
-            user.setProvider(AuthProvider.valueOf(provider.toUpperCase()));
+            user.setProvider(User.AuthProvider.valueOf(provider.toUpperCase()));
             user.setProviderId(providerId);
             user.setEmailVerified(true); // OAuth2 emails are considered verified
             user.setActive(true);
@@ -305,7 +303,7 @@ public class OAuth2Service {
 
             // Assign default role
             Set<Role> roles = new HashSet<>();
-            Role userRole = roleRepository.findByName(ERole.ROLE_USER)
+            Role userRole = roleRepository.findByName(Role.ERole.ROLE_USER)
                 .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
             roles.add(userRole);
             user.setRoles(roles);

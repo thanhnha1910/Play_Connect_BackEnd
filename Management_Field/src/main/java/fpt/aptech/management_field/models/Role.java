@@ -22,4 +22,10 @@ public class Role {
     public Role(ERole name) {
         this.name = name;
     }
+
+    public enum ERole {
+        ROLE_USER,
+        ROLE_OWNER,
+        ROLE_ADMIN
+    }
 }

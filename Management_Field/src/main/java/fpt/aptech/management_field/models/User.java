@@ -78,4 +78,18 @@ public class User {
         inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
+
+    public enum UserStatus {
+        ACTIVE,
+        PENDING_APPROVAL,
+        REJECTED,
+        INACTIVE,
+        SUSPENDED
+    }
+
+    public enum AuthProvider {
+        LOCAL,
+        GOOGLE,
+        FACEBOOK
+    }
 }

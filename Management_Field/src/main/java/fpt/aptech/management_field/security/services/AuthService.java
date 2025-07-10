@@ -49,12 +49,12 @@ public class AuthService {
         user.setFullName(request.getFullName());
         user.setPhoneNumber(request.getPhoneNumber());
         user.setAddress(request.getAddress());
-        user.setStatus(UserStatus.PENDING_APPROVAL); // Owner needs approval
+        user.setStatus(User.UserStatus.PENDING_APPROVAL); // Owner needs approval
         user.setEmailVerified(true); // Auto-verify for owners
         
         // Set ROLE_OWNER
         Set<Role> roles = new HashSet<>();
-        Role ownerRole = roleRepository.findByName(ERole.ROLE_OWNER)
+        Role ownerRole = roleRepository.findByName(Role.ERole.ROLE_OWNER)
                 .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
         roles.add(ownerRole);
         user.setRoles(roles);
