@@ -66,7 +66,12 @@ public class User {
     
     @Column(name = "reset_password_token_expiry")
     private LocalDateTime resetPasswordTokenExpiry;
-    
+    @Column(name = "booking_count")
+    private Integer bookingCount = 0;
+
+    @Column(name = "member_level")
+    private Integer memberLevel = 1;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
@@ -78,4 +83,5 @@ public class User {
         inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
+
 }

@@ -27,8 +27,11 @@ import java.util.Map;
 
 @Service
 public class BookingService {
+
     @Autowired
     private BookingRepository bookingRepository;
+    @Autowired
+    private UserService userService;
 
     public List<BookingDTO> getBookingsByDate(Instant startDate, Instant endDate, Long fieldId) {
         try {
@@ -121,7 +124,14 @@ public class BookingService {
             }
         }
 
-        float totalPrice = field.getHourlyRate() * Duration.between(bookingRequest.getFromTime(), bookingRequest.getToTime()).toHours();
+        long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getToTime()).toHours();
+        int basePrice = field.getHourlyRate() * (int) hours;
+
+        int discountPercent = userService.getDiscountPercent(user.getMemberLevel());
+        int discountAmount = basePrice * discountPercent / 100;
+
+        float totalPrice = basePrice - discountAmount;
+
         String payUrl = payPalPaymentService.initiatePayPalPayment(booking.getBookingId(), totalPrice);
 
         Map<String, Object> response = new HashMap<>();
@@ -139,7 +149,19 @@ public class BookingService {
         }
         booking.setPaymentToken(token);
         booking.setStatus("confirmed");
+
+        // ✅ Cập nhật thông tin user
+        User user = booking.getUser();
+        int updatedBookingCount = user.getBookingCount() + 1;
+        user.setBookingCount(updatedBookingCount);
+
+        int newLevel = userService.calculateLevel(updatedBookingCount);
+        user.setMemberLevel(newLevel);
+
+        userRepository.save(user);
+
         return bookingRepository.save(booking);
+
     }
 
     public List<Booking> getBookingHistory(Long userId) {
@@ -168,38 +190,66 @@ public class BookingService {
     }
 
     @Transactional
-    public Booking handlePaymentCallback(String token, String payerId, String bookingIdStr) {
+    public Map<String, Object> handlePaymentCallback(String token, String payerId, String bookingIdStr) {
         try {
-            // Extract booking ID from token or parameter
-            Long bookingId;
-            if (bookingIdStr != null) {
-                bookingId = Long.valueOf(bookingIdStr);
-            } else {
-                // Extract from token if bookingId not provided
-                // This assumes token contains booking info
-                throw new RuntimeException("Booking ID not provided in callback");
+            Long bookingId = (bookingIdStr != null) ? Long.valueOf(bookingIdStr) : null;
+            if (bookingId == null) {
+                throw new RuntimeException("Booking ID is missing");
             }
-            
-            // Capture the payment through PayPal
+
+            // Capture the payment
             payPalPaymentService.capturePayment(bookingId, token, payerId);
-            
-            // Update booking status
+
             Booking booking = bookingRepository.findById(bookingId)
                     .orElseThrow(() -> new RuntimeException("Booking not found"));
-            
+
             if (!"pending".equals(booking.getStatus())) {
                 throw new RuntimeException("Booking is not in pending state");
             }
-            
+
             booking.setPaymentToken(token);
             booking.setStatus("confirmed");
-            
-            return bookingRepository.save(booking);
-            
+
+            // Cập nhật lại người dùng
+            User user = booking.getUser();
+            int updatedBookingCount = user.getBookingCount() + 1;
+            user.setBookingCount(updatedBookingCount);
+
+            int newLevel = userService.calculateLevel(updatedBookingCount);
+            user.setMemberLevel(newLevel);
+
+            userRepository.save(user);
+            bookingRepository.save(booking);
+
+            // Tính giá
+            long hours = Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
+            int basePrice = booking.getField().getHourlyRate() * (int) hours;
+            int discountPercent = userService.getDiscountPercent(user.getMemberLevel());
+            int discountAmount = basePrice * discountPercent / 100;
+            int totalPrice = basePrice - discountAmount;
+            BookingDTO dto = BookingMapper.mapToDTO(booking, basePrice, discountPercent, discountAmount, totalPrice);
+            // Trả về thông tin đầy đủ
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Payment completed successfully");
+            response.put("booking", dto);
+            response.put("basePrice", basePrice);
+            response.put("discountPercent", discountPercent);
+            response.put("discountAmount", discountAmount);
+            response.put("totalPrice", totalPrice);
+            System.out.println(">>> Booking ID: " + bookingId);
+            System.out.println(">>> User Level: " + user.getMemberLevel());
+            System.out.println(">>> Base Price: " + basePrice);
+            System.out.println(">>> Discount: " + discountAmount);
+            System.out.println(">>> Total Price: " + totalPrice);
+
+            return response;
+
         } catch (Exception e) {
             throw new RuntimeException("Payment callback processing failed: " + e.getMessage());
         }
     }
+
 
 
 
