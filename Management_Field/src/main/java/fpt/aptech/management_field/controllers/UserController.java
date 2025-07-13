@@ -1,9 +1,11 @@
 package fpt.aptech.management_field.controllers;
 
 import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.payload.dtos.UserDTO;
 import fpt.aptech.management_field.payload.response.MessageResponse;
 import fpt.aptech.management_field.repositories.UserRepository;
 import fpt.aptech.management_field.security.services.UserDetailsImpl;
+import fpt.aptech.management_field.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -12,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -19,12 +22,22 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/user")
 public class UserController {
+@Autowired
+private UserService userService;
 
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+
+    @GetMapping("/chat-list")
+    public ResponseEntity<List<UserDTO>> getUsersForChat(@RequestParam Long excludeId) {
+        List<UserDTO> users = userService.getAllUsersExcept(excludeId);
+        return ResponseEntity.ok(users);
+    }
+
 
     @GetMapping("/profile")
     public ResponseEntity<?> getUserProfile() {

@@ -1,14 +1,17 @@
 package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.payload.dtos.UserDTO;
 import fpt.aptech.management_field.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -80,4 +83,12 @@ public class UserService {
         
         return Optional.of(userRepository.saveAndFlush(user));
     }
+
+    public List<UserDTO> getAllUsersExcept(Long excludeId) {
+        return userRepository.findAll().stream()
+                .filter(user -> !user.getId().equals(excludeId))
+                .map(user -> new UserDTO(user.getId(), user.getFullName(), user.getProfilePicture()))
+                .collect(Collectors.toList());
+    }
+
 }
