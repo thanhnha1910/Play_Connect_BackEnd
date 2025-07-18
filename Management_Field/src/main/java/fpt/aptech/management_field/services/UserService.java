@@ -1,8 +1,11 @@
 package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.payload.request.ChangePasswordRequest;
 import fpt.aptech.management_field.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +21,9 @@ public class UserService {
     
     @Autowired
     private EmailService emailService;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
     
     /**
      * Verify a user's email using the verification token
@@ -79,5 +85,41 @@ public class UserService {
         user.setVerificationTokenExpiry(LocalDateTime.now().plusMinutes(3)); // Token expires in 3 minutes
         
         return Optional.of(userRepository.saveAndFlush(user));
+    }
+    
+    @Transactional
+    public void changePassword(ChangePasswordRequest request, User currentUser) {
+        // Step 1: Verify current password
+        if (!passwordEncoder.matches(request.getCurrentPassword(), currentUser.getPassword())) {
+            throw new BadCredentialsException("Current password is incorrect");
+        }
+
+        // Step 2: Validate new password
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalArgumentException("New passwords do not match");
+        }
+
+        // Step 3: Validate password complexity
+        validatePasswordComplexity(request.getNewPassword());
+
+        // Step 4: Encode and save new password
+        String encodedPassword = passwordEncoder.encode(request.getNewPassword());
+        currentUser.setPassword(encodedPassword);
+        userRepository.save(currentUser);
+
+        // Step 5: TODO - Invalidate existing refresh tokens for enhanced security
+        // This would require implementing a token blacklist or refresh token repository
+    }
+
+    private void validatePasswordComplexity(String password) {
+        if (password == null || password.length() < 6) {
+            throw new IllegalArgumentException("Password must be at least 6 characters long");
+        }
+        
+        // Add more complexity requirements as needed
+        // Example: require at least one uppercase, one lowercase, one digit
+        // if (!password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$")) {
+        //     throw new IllegalArgumentException("Password must contain at least one uppercase letter, one lowercase letter, and one digit");
+        // }
     }
 }

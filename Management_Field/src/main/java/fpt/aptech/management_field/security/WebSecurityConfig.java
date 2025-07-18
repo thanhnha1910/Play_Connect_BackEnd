@@ -87,23 +87,31 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/api/fields/**").permitAll()
                         .requestMatchers("/api/locations/**").permitAll()
+                        .requestMatchers("/api/sports/**").permitAll()
                         .requestMatchers("/api/chatbot/**").permitAll()
+                        .requestMatchers("/error").permitAll()
                         // PayPal specific endpoints that need to be public
                         .requestMatchers("/api/booking/payment-callback").permitAll() // PayPal callback
                         .requestMatchers("/api/booking/payment-cancel").permitAll() // PayPal cancel
                         .requestMatchers("/api/booking/success").permitAll() // PayPal success redirect
                         .requestMatchers("/api/booking/confirm").permitAll() // Payment confirmation
-                        .requestMatchers("/api/booking/paypal/capture").permitAll() // Public PayPal capture endpoint
+                        .requestMatchers("/api/booking/paypal/callback").permitAll() // New PayPal callback endpoint
+                        .requestMatchers("/api/booking/debug/**").permitAll() // Debug endpoints
+                        // VNPay specific endpoints that need to be public
+                        .requestMatchers("/api/payment/callback").permitAll() // VNPay callback
+                        .requestMatchers("/api/payment/**").permitAll() // All VNPay payment endpoints
                         // Allow GET requests to booking endpoints for viewing bookings
                         .requestMatchers(HttpMethod.GET, "/api/booking/**").permitAll()
-                        // All other booking endpoints require authentication (including POST /api/booking)
-                        .requestMatchers("/api/booking/**").authenticated() // Other booking endpoints require authentication
-                        .requestMatchers("/api/bookings/**").authenticated() // Bookings endpoints require authentication
                         .requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        // All other booking endpoints require authentication (including POST /api/booking)
+                        .requestMatchers(HttpMethod.POST, "/api/booking").authenticated() // POST to create booking requires auth
+                        .requestMatchers(HttpMethod.PUT, "/api/booking/**").authenticated() // PUT requires auth
+                        .requestMatchers(HttpMethod.DELETE, "/api/booking/**").authenticated() // DELETE requires auth
+                        .requestMatchers("/api/bookings/**").authenticated() // Bookings endpoints require authentication
                         .anyRequest().authenticated()
                 );
 

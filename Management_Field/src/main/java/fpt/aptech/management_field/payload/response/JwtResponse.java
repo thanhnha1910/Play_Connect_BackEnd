@@ -15,8 +15,9 @@ public class JwtResponse {
     private String fullName;
     private List<String> roles;
     private String status;
+    private boolean hasCompletedProfile;
 
-    public JwtResponse(String accessToken, String refreshToken, Long id, String username, String email, String fullName, List<String> roles, String status) {
+    public JwtResponse(String accessToken, String refreshToken, Long id, String username, String email, String fullName, List<String> roles, String status, boolean hasCompletedProfile) {
         this.token = accessToken;
         this.refreshToken = refreshToken;
         this.id = id;
@@ -25,5 +26,6 @@ public class JwtResponse {
         this.fullName = fullName;
         this.roles = roles;
         this.status = status;
+        this.hasCompletedProfile = hasCompletedProfile;
     }
 }

@@ -1,11 +1,21 @@
 package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.models.Field;
+import fpt.aptech.management_field.models.FieldType;
+import fpt.aptech.management_field.models.Location;
+import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.payload.dtos.FieldDetailDto;
+import fpt.aptech.management_field.payload.dtos.FieldSummaryDto;
+import fpt.aptech.management_field.payload.dtos.LocationDto;
+import fpt.aptech.management_field.payload.request.UpsertFieldRequest;
 import fpt.aptech.management_field.payload.response.FieldDetailResponse;
 import fpt.aptech.management_field.payload.response.FieldMapResponse;
 import fpt.aptech.management_field.repositories.FieldRepository;
+import fpt.aptech.management_field.repositories.FieldTypeRepository;
+import fpt.aptech.management_field.repositories.LocationRepository;
 import fpt.aptech.management_field.repositories.BookingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -19,6 +29,12 @@ public class FieldService {
     
     @Autowired
     private FieldRepository fieldRepository;
+    
+    @Autowired
+    private LocationRepository locationRepository;
+    
+    @Autowired
+    private FieldTypeRepository fieldTypeRepository;
     
     @Autowired
     private BookingRepository bookingRepository;
@@ -140,5 +156,142 @@ public class FieldService {
     
     public List<Field> getAllFields() {
         return fieldRepository.findAll();
+    }
+    
+    // Owner Field Management Methods
+    
+    public List<FieldSummaryDto> getFieldsForCurrentUser(User currentUser) {
+        List<Field> fields = fieldRepository.findByLocation_Owner_User_Id(currentUser.getId());
+        return fields.stream()
+            .map(this::convertToFieldSummaryDto)
+            .collect(Collectors.toList());
+    }
+    
+    public FieldDetailDto getFieldDetails(Long fieldId, User currentUser) {
+        Field field = fieldRepository.findById(fieldId)
+            .orElseThrow(() -> new RuntimeException("Field not found with id: " + fieldId));
+        
+        // Verify ownership
+        if (!fieldRepository.existsByFieldIdAndOwnerUserId(fieldId, currentUser.getId())) {
+            throw new AccessDeniedException("You don't have permission to access this field");
+        }
+        
+        return convertToFieldDetailDto(field);
+    }
+    
+    public FieldDetailDto createField(UpsertFieldRequest request, User currentUser) {
+        // Verify that the location belongs to the current user
+        Location location = locationRepository.findById(request.getLocationId())
+            .orElseThrow(() -> new RuntimeException("Location not found with id: " + request.getLocationId()));
+        
+        if (!location.getOwner().getUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You don't have permission to create fields in this location");
+        }
+        
+        // Verify field type exists
+        FieldType fieldType = fieldTypeRepository.findById(request.getTypeId())
+            .orElseThrow(() -> new RuntimeException("Field type not found with id: " + request.getTypeId()));
+        
+        // Create new field
+        Field field = new Field();
+        field.setName(request.getName());
+        field.setDescription(request.getDescription());
+        field.setType(fieldType);
+        field.setLocation(location);
+        field.setIsActive(request.getIsActive());
+        field.setHourlyRate(request.getHourlyRate());
+        
+        Field savedField = fieldRepository.save(field);
+        return convertToFieldDetailDto(savedField);
+    }
+    
+    public FieldDetailDto updateField(Long fieldId, UpsertFieldRequest request, User currentUser) {
+        Field field = fieldRepository.findById(fieldId)
+            .orElseThrow(() -> new RuntimeException("Field not found with id: " + fieldId));
+        
+        // Verify ownership of the field
+        if (!fieldRepository.existsByFieldIdAndOwnerUserId(fieldId, currentUser.getId())) {
+            throw new AccessDeniedException("You don't have permission to update this field");
+        }
+        
+        // If location is being changed, verify ownership of the new location
+        if (!field.getLocation().getLocationId().equals(request.getLocationId())) {
+            Location newLocation = locationRepository.findById(request.getLocationId())
+                .orElseThrow(() -> new RuntimeException("Location not found with id: " + request.getLocationId()));
+            
+            if (!newLocation.getOwner().getUser().getId().equals(currentUser.getId())) {
+                throw new AccessDeniedException("You don't have permission to move fields to this location");
+            }
+            
+            field.setLocation(newLocation);
+        }
+        
+        // Verify field type exists
+        FieldType fieldType = fieldTypeRepository.findById(request.getTypeId())
+            .orElseThrow(() -> new RuntimeException("Field type not found with id: " + request.getTypeId()));
+        
+        // Update field properties
+        field.setName(request.getName());
+        field.setDescription(request.getDescription());
+        field.setType(fieldType);
+        field.setIsActive(request.getIsActive());
+        field.setHourlyRate(request.getHourlyRate());
+        
+        Field updatedField = fieldRepository.save(field);
+        return convertToFieldDetailDto(updatedField);
+    }
+    
+    public void deleteField(Long fieldId, User currentUser) {
+        Field field = fieldRepository.findById(fieldId)
+            .orElseThrow(() -> new RuntimeException("Field not found with id: " + fieldId));
+        
+        // Verify ownership
+        if (!fieldRepository.existsByFieldIdAndOwnerUserId(fieldId, currentUser.getId())) {
+            throw new AccessDeniedException("You don't have permission to delete this field");
+        }
+        
+        fieldRepository.delete(field);
+    }
+    
+    public List<LocationDto> getOwnerLocations(User currentUser) {
+        List<Location> locations = locationRepository.findByOwner_User_Id(currentUser.getId());
+        return locations.stream()
+            .map(this::convertToLocationDto)
+            .collect(Collectors.toList());
+    }
+    
+    // Helper conversion methods
+    
+    private FieldSummaryDto convertToFieldSummaryDto(Field field) {
+        FieldSummaryDto dto = new FieldSummaryDto();
+        dto.setFieldId(field.getFieldId());
+        dto.setName(field.getName());
+        dto.setFieldTypeName(field.getType().getName());
+        dto.setLocationName(field.getLocation().getName());
+        dto.setIsActive(field.getIsActive());
+        dto.setHourlyRate(field.getHourlyRate());
+        return dto;
+    }
+    
+    private FieldDetailDto convertToFieldDetailDto(Field field) {
+        FieldDetailDto dto = new FieldDetailDto();
+        dto.setFieldId(field.getFieldId());
+        dto.setName(field.getName());
+        dto.setDescription(field.getDescription());
+        dto.setFieldTypeName(field.getType().getName());
+        dto.setLocationName(field.getLocation().getName());
+        dto.setIsActive(field.getIsActive());
+        dto.setHourlyRate(field.getHourlyRate());
+        dto.setTypeId(field.getType().getTypeId());
+        dto.setLocationId(field.getLocation().getLocationId());
+        return dto;
+    }
+    
+    private LocationDto convertToLocationDto(Location location) {
+        LocationDto dto = new LocationDto();
+        dto.setLocationId(location.getLocationId());
+        dto.setName(location.getName());
+        dto.setAddress(location.getAddress());
+        return dto;
     }
 }

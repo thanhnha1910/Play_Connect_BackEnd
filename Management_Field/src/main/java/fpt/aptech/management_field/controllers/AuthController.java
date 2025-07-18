@@ -163,7 +163,8 @@ package fpt.aptech.management_field.controllers;
                                                      userDetails.getEmail(),
                                                      userDetails.getFullName(),
                                                      roles,
-                                                     status));
+                                                     status,
+                                                     user1.isHasCompletedProfile()));
         }
 
         @PostMapping("/signup")
@@ -350,19 +351,62 @@ package fpt.aptech.management_field.controllers;
             return ResponseEntity.ok(users);
         }
 
+        // Debug endpoint to verify user directly
+        @PostMapping("/debug-verify")
+        public ResponseEntity<?> debugVerifyUser(@RequestBody Map<String, String> request) {
+            String email = request.get("email");
+            
+            if (email == null || email.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(new MessageResponse("Error: Email is required!"));
+            }
+            
+            Optional<User> userOptional = userRepository.findByEmail(email);
+            
+            if (userOptional.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(new MessageResponse("Error: User not found!"));
+            }
+            
+            User user = userOptional.get();
+            user.setEmailVerified(true);
+            user.setVerificationToken(null);
+            user.setVerificationTokenExpiry(null);
+            userRepository.save(user);
+            
+            return ResponseEntity.ok(new MessageResponse("User verified successfully!"));
+        }
+
         @PostMapping("/oauth2/{provider}")
         public ResponseEntity<?> oauth2Login(@PathVariable String provider, 
                                            @Valid @RequestBody OAuth2Request request) {
             try {
                 OAuth2Service.OAuth2LoginResult result = oauth2Service.processOAuth2Login(request.getCode(), provider);
+                User user = result.getUser();
                 
-                // Create response with complete token information
+                // Convert roles to Set<String>
+                Set<String> roleNames = user.getRoles().stream()
+                    .map(role -> role.getName().name())
+                    .collect(java.util.stream.Collectors.toSet());
+                
+                // Create response with complete token and user information
                 OAuth2Response response = new OAuth2Response();
                 response.setMessage("OAuth2 login successful!");
                 response.setToken(result.getAccessToken());
                 response.setRefreshToken(result.getRefreshToken());
                 response.setTokenType("Bearer");
                 response.setExpiresIn(86400L); // 24 hours in seconds
+                response.setHasCompletedProfile(user.isHasCompletedProfile());
+                
+                // Set complete user data
+                response.setId(user.getId());
+                response.setEmail(user.getEmail());
+                response.setFullName(user.getFullName());
+                response.setUsername(user.getUsername());
+                response.setImageUrl(user.getImageUrl());
+                response.setRoles(roleNames);
+                response.setEmailVerified(user.isEmailVerified());
+                response.setActive(user.isActive());
                 
                 return ResponseEntity.ok(response);
             } catch (Exception e) {
