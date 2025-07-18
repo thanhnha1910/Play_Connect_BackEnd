@@ -35,8 +35,9 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             "/api/auth",
             "/api/fields",
             "/api/locations",
-            
+            "/api/chatbot",
             "/api/test",
+            "/api/booking/receipt", // Public booking receipt endpoints
             "/swagger-ui",
             "/v3/api-docs"
     );
@@ -46,7 +47,10 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             "/api/booking/payment-cancel",
             "/api/booking/success",
             "/api/booking/confirm",
-            "/api/booking/paypal/capture" // Public PayPal capture endpoint
+            "/api/booking/paypal/capture", // Public PayPal capture endpoint
+            "/api/payment/callback", // VNPay callback endpoint
+            "/api/payment/success",
+            "/api/payment/cancel"
     );
 
     @Override
@@ -71,15 +75,9 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             logger.info("Path {} matches exact public path", path);
         }
         
-        // Allow GET requests to booking endpoints
-        boolean isBookingGetRequest = "GET".equals(method) && path.startsWith("/api/booking/");
-        if (isBookingGetRequest) {
-            logger.info("Path {} is a booking GET request", path);
-        }
-        
-        boolean shouldSkip = matchesPrefix || matchesExactPath || isBookingGetRequest;
-        logger.info("=== shouldNotFilter FINAL result: {} (prefix: {}, exact: {}, booking GET: {}) ===", 
-            shouldSkip, matchesPrefix, matchesExactPath, isBookingGetRequest);
+        boolean shouldSkip = matchesPrefix || matchesExactPath;
+        logger.info("=== shouldNotFilter FINAL result: {} (prefix: {}, exact: {}) ===", 
+            shouldSkip, matchesPrefix, matchesExactPath);
         
         return shouldSkip;
     }

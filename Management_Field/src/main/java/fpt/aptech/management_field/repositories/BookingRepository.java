@@ -24,4 +24,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("field") Field field,
             @Param("toTime") Instant toTime,
             @Param("fromTime") Instant fromTime);
+
+    @Query("SELECT b FROM Booking b WHERE b.fromTime >= :now AND b.fromTime <= :twoHoursLater " +
+            "AND b.status = 'confirmed' AND (b.reminderSent = false OR b.reminderSent IS NULL)")
+    List<Booking> findUpcomingBookingsForReminder(
+            @Param("now") Instant now,
+            @Param("twoHoursLater") Instant twoHoursLater);
+
+    @Query("SELECT b FROM Booking b WHERE b.user.id = :userId ORDER BY b.fromTime DESC")
+    List<Booking> findByUserIdOrderByFromTimeDesc(@Param("userId") Long userId);
 }

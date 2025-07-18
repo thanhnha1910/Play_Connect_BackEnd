@@ -1,5 +1,6 @@
 package fpt.aptech.management_field.services;
 
+import fpt.aptech.management_field.events.BookingConfirmedEvent;
 import fpt.aptech.management_field.mappers.BookingMapper;
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.BookingUser;
@@ -7,6 +8,7 @@ import fpt.aptech.management_field.models.Field;
 import fpt.aptech.management_field.models.FieldClosure;
 import fpt.aptech.management_field.models.User;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
+import fpt.aptech.management_field.payload.dtos.BookingHistoryDto;
 import fpt.aptech.management_field.payload.request.BookingRequest;
 import fpt.aptech.management_field.repositories.BookingRepository;
 import fpt.aptech.management_field.repositories.BookingUserRepository;
@@ -14,6 +16,7 @@ import fpt.aptech.management_field.repositories.FieldRepository;
 import fpt.aptech.management_field.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.util.ArrayList;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,9 @@ import java.util.Map;
 public class BookingService {
     @Autowired
     private BookingRepository bookingRepository;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     public List<BookingDTO> getBookingsByDate(Instant startDate, Instant endDate, Long fieldId) {
         try {
@@ -139,11 +145,47 @@ public class BookingService {
         }
         booking.setPaymentToken(token);
         booking.setStatus("confirmed");
-        return bookingRepository.save(booking);
+        Booking savedBooking = bookingRepository.save(booking);
+        
+        // Publish booking confirmed event
+        eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
+        
+        return savedBooking;
     }
 
     public List<Booking> getBookingHistory(Long userId) {
         return bookingRepository.findByUserId(userId);
+    }
+
+    public List<BookingHistoryDto> getBookingsForUser(Long userId) {
+        List<Booking> bookings = bookingRepository.findByUserIdOrderByFromTimeDesc(userId);
+        return bookings.stream().map(this::convertToBookingHistoryDto).toList();
+    }
+
+    private BookingHistoryDto convertToBookingHistoryDto(Booking booking) {
+        BookingHistoryDto dto = new BookingHistoryDto();
+        dto.setBookingId(booking.getBookingId());
+        dto.setFieldName(booking.getField().getName());
+        
+        // Get address from the location if available
+        if (booking.getField().getLocation() != null) {
+            dto.setFieldAddress(booking.getField().getLocation().getAddress());
+        } else {
+            dto.setFieldAddress("Address not available");
+        }
+        
+        // Set a default cover image or null if not available
+        dto.setCoverImageUrl(null); // or set a default image URL
+        
+        dto.setStartTime(booking.getFromTime());
+        dto.setEndTime(booking.getToTime());
+        
+        // Calculate total price - fix type conversion
+        long hours = java.time.Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
+        dto.setTotalPrice((double) (booking.getField().getHourlyRate() * hours));
+        
+        dto.setStatus(booking.getStatus());
+        return dto;
     }
 
     public Booking getBookingById(Long bookingId) {
@@ -194,7 +236,12 @@ public class BookingService {
             booking.setPaymentToken(token);
             booking.setStatus("confirmed");
             
-            return bookingRepository.save(booking);
+            Booking savedBooking = bookingRepository.save(booking);
+            
+            // Publish booking confirmed event
+            eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
+            
+            return savedBooking;
             
         } catch (Exception e) {
             throw new RuntimeException("Payment callback processing failed: " + e.getMessage());

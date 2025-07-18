@@ -9,6 +9,8 @@ import fpt.aptech.management_field.payload.dtos.OwnerAnalyticsDto;
 import fpt.aptech.management_field.payload.dtos.OwnerSummaryDto;
 import fpt.aptech.management_field.payload.dtos.PendingOwnerDto;
 import fpt.aptech.management_field.payload.dtos.RecentActivityDto;
+import fpt.aptech.management_field.payload.dtos.UserSummaryDto;
+import fpt.aptech.management_field.payload.dtos.DetailedAnalyticsDto;
 import fpt.aptech.management_field.payload.response.AdminStatsResponse;
 import fpt.aptech.management_field.repositories.BookingRepository;
 import fpt.aptech.management_field.repositories.FieldRepository;
@@ -23,8 +25,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -282,4 +286,205 @@ public class AdminService {
             return criteriaBuilder.equal(root.get("status"), status);
         };
     }
+    
+    // User Management Methods
+    public Page<UserSummaryDto> getAllRegularUsers(Pageable pageable, String search, String status) {
+        Specification<User> spec = Specification.where(hasUserRole());
+        
+        if (search != null && !search.trim().isEmpty()) {
+            spec = spec.and(hasNameOrEmailContaining(search.trim()));
+        }
+        
+        if (status != null && !status.trim().isEmpty() && !"all".equalsIgnoreCase(status)) {
+            try {
+                UserStatus userStatus = UserStatus.valueOf(status.trim().toUpperCase());
+                spec = spec.and(hasStatus(userStatus));
+            } catch (IllegalArgumentException e) {
+                // Invalid status, ignore filter
+            }
+        }
+        
+        Page<User> users = userRepository.findAll(spec, pageable);
+        
+        return users.map(user -> new UserSummaryDto(
+            user.getId(),
+            user.getFullName(),
+            user.getEmail(),
+            user.getImageUrl() != null ? user.getImageUrl() : user.getProfilePicture(),
+            user.getJoinDate(),
+            user.getStatus().toString()
+        ));
+    }
+    
+    @Transactional
+    public User suspendUser(Long userId) {
+        Optional<User> userOptional = userRepository.findById(userId);
+        if (userOptional.isEmpty()) {
+            throw new RuntimeException("User not found!");
+        }
+
+        User user = userOptional.get();
+        
+        // Check if user has USER role (not ADMIN or OWNER)
+        boolean hasUserRole = user.getRoles().stream()
+                .anyMatch(role -> role.getName() == ERole.ROLE_USER);
+        
+        if (!hasUserRole) {
+            throw new RuntimeException("Can only suspend regular users!");
+        }
+
+        user.setStatus(UserStatus.SUSPENDED);
+        return userRepository.save(user);
+    }
+    
+    @Transactional
+    public User activateUser(Long userId) {
+        Optional<User> userOptional = userRepository.findById(userId);
+        if (userOptional.isEmpty()) {
+            throw new RuntimeException("User not found!");
+        }
+
+        User user = userOptional.get();
+        
+        // Check if user has USER role (not ADMIN or OWNER)
+        boolean hasUserRole = user.getRoles().stream()
+                .anyMatch(role -> role.getName() == ERole.ROLE_USER);
+        
+        if (!hasUserRole) {
+            throw new RuntimeException("Can only activate regular users!");
+        }
+
+        user.setStatus(UserStatus.ACTIVE);
+        return userRepository.save(user);
+    }
+    
+    private Specification<User> hasUserRole() {
+        return (root, query, criteriaBuilder) -> {
+            return criteriaBuilder.equal(
+                root.join("roles").get("name"), 
+                ERole.ROLE_USER
+            );
+        };
+     }
+     
+     // Analytics Methods
+     public DetailedAnalyticsDto getDetailedAnalytics(LocalDate startDate, LocalDate endDate) {
+         // User Growth Data
+         List<DetailedAnalyticsDto.TimeSeriesData> userGrowth = generateUserGrowthData(startDate, endDate);
+         
+         // Revenue Trend Data (based on bookings)
+         List<DetailedAnalyticsDto.TimeSeriesData> revenueTrend = generateRevenueTrendData(startDate, endDate);
+         
+         // Top Performing Fields
+         List<DetailedAnalyticsDto.TopPerformingItem> topFields = generateTopFieldsData(startDate, endDate);
+         
+         // Booking Statistics
+         DetailedAnalyticsDto.BookingStats bookingStats = generateBookingStats(startDate, endDate);
+         
+         return new DetailedAnalyticsDto(userGrowth, revenueTrend, topFields, bookingStats);
+     }
+     
+     private List<DetailedAnalyticsDto.TimeSeriesData> generateUserGrowthData(LocalDate startDate, LocalDate endDate) {
+         List<DetailedAnalyticsDto.TimeSeriesData> data = new java.util.ArrayList<>();
+         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+         
+         LocalDate current = startDate;
+         while (!current.isAfter(endDate)) {
+             LocalDateTime dayStart = current.atStartOfDay();
+             LocalDateTime dayEnd = current.plusDays(1).atStartOfDay();
+             
+             long userCount = userRepository.findAll().stream()
+                 .filter(user -> user.getJoinDate() != null && 
+                         !user.getJoinDate().isBefore(dayStart) && 
+                         user.getJoinDate().isBefore(dayEnd))
+                 .count();
+             
+             data.add(new DetailedAnalyticsDto.TimeSeriesData(current.format(formatter), userCount));
+             current = current.plusDays(1);
+         }
+         
+         return data;
+     }
+     
+     private List<DetailedAnalyticsDto.TimeSeriesData> generateRevenueTrendData(LocalDate startDate, LocalDate endDate) {
+         List<DetailedAnalyticsDto.TimeSeriesData> data = new java.util.ArrayList<>();
+         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+         
+         LocalDate current = startDate;
+         while (!current.isAfter(endDate)) {
+             LocalDateTime dayStart = current.atStartOfDay();
+             LocalDateTime dayEnd = current.plusDays(1).atStartOfDay();
+             
+             // Simulate revenue data based on bookings (you can implement actual payment calculation)
+             long dailyRevenue = bookingRepository.findAll().stream()
+                 .filter(booking -> booking.getCreatedAt() != null && 
+                         !booking.getCreatedAt().isBefore(dayStart) && 
+                         booking.getCreatedAt().isBefore(dayEnd))
+                 .count() * 50; // Assuming average booking value of 50
+             
+             data.add(new DetailedAnalyticsDto.TimeSeriesData(current.format(formatter), dailyRevenue));
+             current = current.plusDays(1);
+         }
+         
+         return data;
+     }
+     
+     private List<DetailedAnalyticsDto.TopPerformingItem> generateTopFieldsData(LocalDate startDate, LocalDate endDate) {
+         LocalDateTime start = startDate.atStartOfDay();
+         LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+         
+         Map<String, Long> fieldBookings = new HashMap<>();
+         
+         bookingRepository.findAll().stream()
+             .filter(booking -> booking.getCreatedAt() != null && 
+                     !booking.getCreatedAt().isBefore(start) && 
+                     booking.getCreatedAt().isBefore(end))
+             .forEach(booking -> {
+                 String fieldName = booking.getField() != null ? booking.getField().getName() : "Unknown Field";
+                 fieldBookings.merge(fieldName, 1L, Long::sum);
+             });
+         
+         return fieldBookings.entrySet().stream()
+             .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+             .limit(10)
+             .map(entry -> new DetailedAnalyticsDto.TopPerformingItem(
+                 entry.getKey(), 
+                 entry.getValue(), 
+                 entry.getValue() * 50.0)) // Assuming average revenue per booking
+             .collect(java.util.stream.Collectors.toList());
+     }
+     
+     private DetailedAnalyticsDto.BookingStats generateBookingStats(LocalDate startDate, LocalDate endDate) {
+         LocalDateTime start = startDate.atStartOfDay();
+         LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+         
+         List<fpt.aptech.management_field.models.Booking> bookings = bookingRepository.findAll().stream()
+             .filter(booking -> booking.getCreatedAt() != null && 
+                     !booking.getCreatedAt().isBefore(start) && 
+                     booking.getCreatedAt().isBefore(end))
+             .collect(java.util.stream.Collectors.toList());
+         
+         long totalBookings = bookings.size();
+         double totalRevenue = totalBookings * 50.0; // Assuming average booking value
+         double averageBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
+         
+         // Generate hourly booking data
+         Map<Integer, Long> hourlyBookings = new HashMap<>();
+         for (int hour = 0; hour < 24; hour++) {
+             hourlyBookings.put(hour, 0L);
+         }
+         
+         bookings.forEach(booking -> {
+             if (booking.getCreatedAt() != null) {
+                 int hour = booking.getCreatedAt().getHour();
+                 hourlyBookings.merge(hour, 1L, Long::sum);
+             }
+         });
+         
+         List<DetailedAnalyticsDto.HourlyBookingData> peakHours = hourlyBookings.entrySet().stream()
+             .map(entry -> new DetailedAnalyticsDto.HourlyBookingData(entry.getKey(), entry.getValue()))
+             .collect(java.util.stream.Collectors.toList());
+         
+         return new DetailedAnalyticsDto.BookingStats(totalBookings, totalRevenue, averageBookingValue, peakHours);
+     }
 }

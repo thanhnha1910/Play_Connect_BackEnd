@@ -45,6 +45,9 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
     @Query("SELECT COUNT(f) FROM Field f WHERE f.location.locationId = :locationId")
     Integer countFieldsByLocationId(@Param("locationId") Long locationId);
     
+    // Find locations by owner's user ID
+    List<Location> findByOwner_User_Id(Long userId);
+    
     // Get average rating for a location (returns null if table doesn't exist)
     @Query(value = "SELECT CASE WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'location_reviews') " +
            "THEN (SELECT AVG(CAST(lr.rating AS DECIMAL(3,2))) FROM location_reviews lr WHERE lr.location_id = :locationId) " +

@@ -48,6 +48,14 @@ public interface FieldRepository extends JpaRepository<Field, Long>, JpaSpecific
 
     @Query(value = "SELECT f FROM Field f WHERE f.location.locationId = :locationId")
     List<Field> getFieldsByLocationId(@Param("locationId") Long locationId);
+    
+    // Find fields by owner's user ID
+    @Query("SELECT f FROM Field f WHERE f.location.owner.user.id = :userId")
+    List<Field> findByLocation_Owner_User_Id(@Param("userId") Long userId);
+    
+    // Check if field belongs to specific user
+    @Query("SELECT COUNT(f) > 0 FROM Field f WHERE f.fieldId = :fieldId AND f.location.owner.user.id = :userId")
+    boolean existsByFieldIdAndOwnerUserId(@Param("fieldId") Long fieldId, @Param("userId") Long userId);
 
 
     @Query("SELECT f FROM Field f WHERE f.isActive = true AND f.fieldId NOT IN " +

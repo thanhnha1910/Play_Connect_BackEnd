@@ -1,9 +1,22 @@
 package fpt.aptech.management_field.controllers;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import fpt.aptech.management_field.models.Notification;
 import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.payload.dtos.BookingHistoryDto;
+import fpt.aptech.management_field.payload.dtos.SportProfileDto;
+import fpt.aptech.management_field.payload.request.ChangePasswordRequest;
+import fpt.aptech.management_field.payload.request.OnboardingRequest;
+import fpt.aptech.management_field.payload.request.UpdateUserProfileRequest;
 import fpt.aptech.management_field.payload.response.MessageResponse;
 import fpt.aptech.management_field.repositories.UserRepository;
 import fpt.aptech.management_field.security.services.UserDetailsImpl;
+import fpt.aptech.management_field.services.BookingService;
+import fpt.aptech.management_field.services.NotificationService;
+import fpt.aptech.management_field.services.OnboardingService;
+import fpt.aptech.management_field.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -12,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -25,6 +39,20 @@ public class UserController {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private BookingService bookingService;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private OnboardingService onboardingService;
+    
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @GetMapping("/profile")
     public ResponseEntity<?> getUserProfile() {
@@ -43,6 +71,22 @@ public class UserController {
             response.put("phoneNumber", user.getPhoneNumber());
             response.put("address", user.getAddress());
             response.put("profilePicture", user.getProfilePicture());
+            response.put("isDiscoverable", user.getIsDiscoverable());
+            
+            // Parse sport profiles from JSON
+            if (user.getSportProfiles() != null) {
+                try {
+                    Map<String, SportProfileDto> sportProfiles = objectMapper.readValue(
+                        user.getSportProfiles(), 
+                        new TypeReference<Map<String, SportProfileDto>>() {}
+                    );
+                    response.put("sportProfiles", sportProfiles);
+                } catch (JsonProcessingException e) {
+                    response.put("sportProfiles", new HashMap<>());
+                }
+            } else {
+                response.put("sportProfiles", new HashMap<>());
+            }
             
             return ResponseEntity.ok(response);
         } else {
@@ -93,9 +137,41 @@ public class UserController {
         }
     }
     
+    @PostMapping("/profile/sport")
+    public ResponseEntity<?> updateSportProfiles(@RequestBody UpdateUserProfileRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        Optional<User> userOptional = userRepository.findById(userDetails.getId());
+        
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            
+            try {
+                // Convert sport profiles to JSON string
+                if (request.getSportProfiles() != null) {
+                    String sportProfilesJson = objectMapper.writeValueAsString(request.getSportProfiles());
+                    user.setSportProfiles(sportProfilesJson);
+                }
+                
+                if (request.getIsDiscoverable() != null) {
+                    user.setIsDiscoverable(request.getIsDiscoverable());
+                }
+                
+                userRepository.save(user);
+                
+                return ResponseEntity.ok(new MessageResponse("Sport profiles updated successfully"));
+            } catch (JsonProcessingException e) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Error processing sport profiles: " + e.getMessage()));
+            }
+        } else {
+            return ResponseEntity.badRequest().body(new MessageResponse("User not found"));
+        }
+    }
+    
     @PutMapping("/change-password")
     // @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> passwordData) {
+    public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         
@@ -107,24 +183,45 @@ public class UserController {
         
         User user = userOptional.get();
         
-        String currentPassword = passwordData.get("currentPassword");
-        String newPassword = passwordData.get("newPassword");
-        String confirmPassword = passwordData.get("confirmPassword");
-        
-        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Current password is incorrect"));
+        try {
+            userService.changePassword(request, user);
+            return ResponseEntity.ok(new MessageResponse("Password changed successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }
-        
-        if (!newPassword.equals(confirmPassword)) {
-            return ResponseEntity.badRequest().body(new MessageResponse("New passwords do not match"));
-        }
-        
-        user.setPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
-        
-        return ResponseEntity.ok(new MessageResponse("Password changed successfully"));
     }
     
+    @PutMapping("/profile/onboarding")
+    public ResponseEntity<?> completeOnboarding(@RequestBody OnboardingRequest request) {
+        System.out.println("DEBUG: Onboarding endpoint called");
+        System.out.println("DEBUG: Request received: " + request);
+        
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        System.out.println("DEBUG: User ID: " + userDetails.getId());
+        
+        Optional<User> userOptional = userRepository.findById(userDetails.getId());
+        
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            System.out.println("DEBUG: User found: " + user.getEmail());
+            
+            try {
+                System.out.println("DEBUG: Processing onboarding with service");
+                onboardingService.processOnboarding(user, request);
+                System.out.println("DEBUG: Onboarding processed successfully");
+                return ResponseEntity.ok(new MessageResponse("Onboarding completed successfully"));
+            } catch (Exception e) {
+                System.err.println("DEBUG: Error in onboarding processing: " + e.getMessage());
+                e.printStackTrace();
+                return ResponseEntity.badRequest().body(new MessageResponse("Error processing onboarding data: " + e.getMessage()));
+            }
+        } else {
+            System.err.println("DEBUG: User not found for ID: " + userDetails.getId());
+            return ResponseEntity.badRequest().body(new MessageResponse("User not found"));
+        }
+    }
+
     @GetMapping("/{id}")
     // @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> getUserById(@PathVariable Long id) {
@@ -162,6 +259,68 @@ public class UserController {
             return ResponseEntity.ok(new MessageResponse("User " + status + " successfully"));
         } else {
             return ResponseEntity.badRequest().body(new MessageResponse("User not found"));
+        }
+    }
+
+    @GetMapping("/bookings")
+    public ResponseEntity<?> getUserBookings() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            List<BookingHistoryDto> bookings = bookingService.getBookingsForUser(userDetails.getId());
+            return ResponseEntity.ok(bookings);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error fetching bookings: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/notifications")
+    public ResponseEntity<?> getUserNotifications() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            List<Notification> notifications = notificationService.getNotificationsForUser(userDetails.getId());
+            return ResponseEntity.ok(notifications);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error fetching notifications: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/notifications/unread")
+    public ResponseEntity<?> getUnreadNotifications() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            List<Notification> notifications = notificationService.getUnreadNotificationsForUser(userDetails.getId());
+            return ResponseEntity.ok(notifications);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error fetching unread notifications: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/notifications/{id}/read")
+    public ResponseEntity<?> markNotificationAsRead(@PathVariable Long id) {
+        try {
+            notificationService.markNotificationAsRead(id);
+            return ResponseEntity.ok(new MessageResponse("Notification marked as read"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error marking notification as read: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/notifications/read-all")
+    public ResponseEntity<?> markAllNotificationsAsRead() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            notificationService.markAllNotificationsAsRead(userDetails.getId());
+            return ResponseEntity.ok(new MessageResponse("All notifications marked as read"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error marking notifications as read: " + e.getMessage()));
         }
     }
 }

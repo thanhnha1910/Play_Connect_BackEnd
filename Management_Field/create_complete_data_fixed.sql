@@ -148,7 +148,7 @@ SELECT
     u.is_active,
     u.email_verified,
     u.provider,
-    GROUP_CONCAT(r.name) as roles
+    STRING_AGG(r.name, ', ') AS roles
 FROM users u
 LEFT JOIN user_roles ur ON u.id = ur.user_id
 LEFT JOIN roles r ON ur.role_id = r.id
