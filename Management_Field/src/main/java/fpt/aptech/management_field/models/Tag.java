@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "tags")
@@ -20,6 +21,7 @@ public class Tag {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sport_id")
+    @JsonIgnore
     private Sport sport;
     
     @Column(name = "is_active", nullable = false)
