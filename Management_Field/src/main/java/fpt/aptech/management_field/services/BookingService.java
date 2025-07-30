@@ -38,7 +38,7 @@ public class BookingService {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
-    
+
     @Autowired
     private BookingMapper bookingMapper;
      @Autowired
@@ -55,7 +55,6 @@ public class BookingService {
         }
     }
 
-
     @Autowired
     private FieldRepository fieldRepository;
 
@@ -67,10 +66,10 @@ public class BookingService {
 
     @Autowired
     private PayPalPaymentService payPalPaymentService;
-    
+
     @Autowired
     private DraftMatchRepository draftMatchRepository;
-    
+
     @Autowired
     private NotificationService notificationService;
     @Transactional
@@ -83,24 +82,24 @@ public class BookingService {
         // Convert Instant to LocalDateTime for comparison with FieldClosure dates
         LocalDateTime fromTimeLocal = LocalDateTime.ofInstant(bookingRequest.getFromTime(), ZoneId.systemDefault());
         LocalDateTime toTimeLocal = LocalDateTime.ofInstant(bookingRequest.getToTime(), ZoneId.systemDefault());
-        
+
         // Custom validation for booking time (replacing @Future annotation)
         LocalDateTime nowLocal = LocalDateTime.now(ZoneId.systemDefault());
-        
+
         // Allow booking within 24 hours ahead, calculated in local timezone
         if (fromTimeLocal.isBefore(nowLocal.minusHours(1))) {
             throw new RuntimeException("Cannot book for past time slots");
         }
-        
+
         if (toTimeLocal.isBefore(fromTimeLocal)) {
             throw new RuntimeException("End time must be after start time");
         }
-        
+
         // Check if field is active
         if (field.getIsActive() == null || !field.getIsActive()) {
             throw new RuntimeException("Field is not available");
         }
-        
+
         // Check field closures
         List<FieldClosure> fieldClosures = field.getFieldClosures();
         if (fieldClosures != null) {
@@ -170,10 +169,10 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         booking.setPaymentToken(token);
         booking.setStatus("confirmed");
         Booking savedBooking = bookingRepository.save(booking);
-        
+
         // Publish booking confirmed event
         eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
-        
+
         return savedBooking;
     }
 
@@ -190,24 +189,24 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         BookingHistoryDto dto = new BookingHistoryDto();
         dto.setBookingId(booking.getBookingId());
         dto.setFieldName(booking.getField().getName());
-        
+
         // Get address from the location if available
         if (booking.getField().getLocation() != null) {
             dto.setFieldAddress(booking.getField().getLocation().getAddress());
         } else {
             dto.setFieldAddress("Address not available");
         }
-        
+
         // Set a default cover image or null if not available
         dto.setCoverImageUrl(null); // or set a default image URL
-        
+
         dto.setStartTime(booking.getFromTime());
         dto.setEndTime(booking.getToTime());
         
         // Calculate total price with discount - fix type conversion and add discount calculation
         long hours = java.time.Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
         double basePrice = booking.getField().getHourlyRate() * hours;
-        
+
         // Apply discount if user has memberLevel
         if (booking.getUser() != null) {
             Integer memberLevel = booking.getUser().getMemberLevel();
@@ -255,14 +254,14 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
                 // This assumes token contains booking info
                 throw new RuntimeException("Booking ID not provided in callback");
             }
-            
+
             // Capture the payment through PayPal
             payPalPaymentService.capturePayment(bookingId, token, payerId);
-            
+
             // Update booking status
             Booking booking = bookingRepository.findById(bookingId)
                     .orElseThrow(() -> new RuntimeException("Booking not found"));
-            
+
             if (!"pending".equals(booking.getStatus())) {
                 throw new RuntimeException("Booking is not in pending state");
             }
@@ -278,7 +277,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
              userRepository.save(user);
 
             Booking savedBooking = bookingRepository.save(booking);
-            
+
             long hours = Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
             int basePrice = booking.getField().getHourlyRate() * (int) hours;
             // Thêm null check cho memberLevel
@@ -288,57 +287,57 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
             int totalPrice = basePrice - discountAmount;
             // Publish booking confirmed event
             eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
-            
+
             return savedBooking;
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Payment callback processing failed: " + e.getMessage());
         }
     }
-    
+
     @Transactional
     public Map<String, Object> convertDraftMatchToBooking(Long draftMatchId, Long bookingId, Long userId) {
         // Find the draft match
         DraftMatch draftMatch = draftMatchRepository.findById(draftMatchId)
                 .orElseThrow(() -> new RuntimeException("Draft match not found"));
-        
+
         // Verify the user is the creator
         if (!draftMatch.getCreator().getId().equals(userId)) {
             throw new RuntimeException("Only the creator can convert this draft match");
         }
-        
+
         // Verify the draft match is in AWAITING_CONFIRMATION status
         if (!"AWAITING_CONFIRMATION".equals(draftMatch.getStatus())) {
             throw new RuntimeException("Draft match is not in awaiting confirmation status");
         }
-        
+
         // Find the booking
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        
+
         // Verify the booking belongs to the same user
         if (!booking.getUser().getId().equals(userId)) {
             throw new RuntimeException("Booking does not belong to the user");
         }
-        
+
         // Update draft match status to CONVERTED_TO_MATCH
         draftMatch.setStatus("CONVERTED_TO_MATCH");
         draftMatch = draftMatchRepository.save(draftMatch);
-        
+
         // Send notifications to all interested users
         for (User interestedUser : draftMatch.getInterestedUsers()) {
             createNotificationForDraftMatchConfirmed(draftMatch, booking, interestedUser);
         }
-        
+
         Map<String, Object> result = new HashMap<>();
         result.put("draftMatchId", draftMatchId);
         result.put("bookingId", bookingId);
         result.put("status", draftMatch.getStatus());
         result.put("notificationsSent", draftMatch.getInterestedUsers().size());
-        
+
         return result;
     }
-    
+
     private void createNotificationForDraftMatchConfirmed(DraftMatch draftMatch, Booking booking, User recipient) {
         Notification notification = new Notification();
         notification.setRecipient(recipient);
@@ -353,7 +352,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         notification.setRelatedEntityId(booking.getBookingId());
         notification.setCreatedAt(LocalDateTime.now());
         notification.setIsRead(false);
-        
+
         notificationService.createNotification(notification);
     }
 

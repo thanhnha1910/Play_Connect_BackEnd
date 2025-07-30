@@ -84,15 +84,15 @@ public class PayPalPaymentService {
         System.out.println("BookingID: " + bookingId);
         System.out.println("Token: " + token);
         System.out.println("PayerID: " + payerId);
-        
+
         // For development: Skip actual PayPal capture for test tokens
         if (isTestToken(token, payerId)) {
             System.out.println("Test token detected - skipping actual PayPal capture");
             return; // Skip actual PayPal API call for test tokens
         }
-        
+
         String accessToken = getAccessToken();
-        
+
         // Use the token as orderId since PayPal returns the actual order ID in the token parameter
         String orderId = token;
 
@@ -102,11 +102,11 @@ public class PayPalPaymentService {
 
         HttpEntity<String> entity = new HttpEntity<>("", headers);
         String url = paypalUrl + "/v2/checkout/orders/" + orderId + "/capture";
-        
+
         try {
             System.out.println("Making PayPal capture API call to: " + url);
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-            
+
             if (response.getStatusCode().is2xxSuccessful()) {
                 System.out.println("PayPal Capture Success: " + response.getBody());
             } else {
@@ -124,42 +124,42 @@ public class PayPalPaymentService {
         System.out.println("=== PayPal Verification Debug ===");
         System.out.println("OrderID: " + orderId);
         System.out.println("PayerID: " + payerId);
-        
+
         // For development: Allow test tokens to bypass verification
         if (isTestToken(orderId, payerId)) {
             System.out.println("Test token detected - bypassing PayPal verification");
             return true;
         }
-        
+
         try {
             String accessToken = getAccessToken();
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(accessToken);
-            
+
             HttpEntity<String> entity = new HttpEntity<>("", headers);
             String url = paypalUrl + "/v2/checkout/orders/" + orderId;
-            
+
             System.out.println("Making PayPal API call to: " + url);
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-            
+
             if (response.getStatusCode().is2xxSuccessful()) {
                 Map<String, Object> orderDetails = response.getBody();
                 System.out.println("PayPal API Response: " + orderDetails);
-                
+
                 String status = (String) orderDetails.get("status");
-                
+
                 // Verify that the order is approved/completed and ready for capture
                 boolean isApproved = "APPROVED".equals(status) || "COMPLETED".equals(status);
-                
+
                 // Additional verification: check if payer information matches
                 Map<String, Object> payer = (Map<String, Object>) orderDetails.get("payer");
                 boolean payerMatches = payer != null && payerId.equals(payer.get("payer_id"));
-                
+
                 System.out.println("PayPal Order Verification - Status: " + status + ", PayerID Match: " + payerMatches);
                 System.out.println("Expected PayerID: " + payerId + ", Actual PayerID: " + (payer != null ? payer.get("payer_id") : "null"));
-                
+
                 return isApproved && payerMatches;
             } else {
                 System.err.println("PayPal Verification Error: " + response.getStatusCode() + " - " + response.getBody());
@@ -171,19 +171,19 @@ public class PayPalPaymentService {
             return false;
         }
     }
-    
+
     /**
      * Check if the provided token and payerId are test values for development
      */
     private boolean isTestToken(String token, String payerId) {
         // Allow common test tokens to bypass verification
-        return token != null && (token.startsWith("test_") || 
-                                token.startsWith("TEST_") ||
-                                token.equals("test-token") ||
-                                token.equals("5SS09998604657458") || // Add specific test token
-                                token.length() < 10); // Very short tokens are likely test tokens
+        return token != null && (token.startsWith("test_") ||
+                token.startsWith("TEST_") ||
+                token.equals("test-token") ||
+                token.equals("5SS09998604657458") || // Add specific test token
+                token.length() < 10); // Very short tokens are likely test tokens
     }
-    
+
 
     public String getAccessToken() {
         HttpHeaders headers = new HttpHeaders();

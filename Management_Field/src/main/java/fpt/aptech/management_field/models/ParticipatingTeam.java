@@ -1,9 +1,14 @@
 package fpt.aptech.management_field.models;
 
 import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.OneToMany;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 @Entity
 @Table(name = "participating_teams")
@@ -27,4 +32,12 @@ public class ParticipatingTeam {
     @ManyToOne
     @JoinColumn(name = "tournament_id", insertable = false, updatable = false)
     private Tournament tournament;
+
+    @Column(name = "status")
+    private String status;
+
+    @Column(name = "payment_token")
+    private String paymentToken;
+
+    
 }

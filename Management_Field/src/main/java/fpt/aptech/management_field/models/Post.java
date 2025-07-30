@@ -18,13 +18,13 @@ public class Post {
     @Column(name = "post_id")
     private Long postId;
 
-    @Column(name = "title")
+    @Column(name = "title", length = 1000)
     private String title;
 
-    @Column(name = "content")
+    @Column(name = "content", length = 1000)
     private String content;
 
-    @Column(name = "category")
+    @Column(name = "category", length = 1000)
     private String category;
 
     @Column(name = "image_url")

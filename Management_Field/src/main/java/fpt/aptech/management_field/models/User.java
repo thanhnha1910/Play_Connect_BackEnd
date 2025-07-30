@@ -83,13 +83,13 @@ public class User {
     
     @Column(name = "has_completed_profile", nullable = false, columnDefinition = "bit default 0")
     private boolean hasCompletedProfile = false; // Default to false for new users
-    
+
     @Column(name = "booking_count")
     private Integer bookingCount = 0;
 
     @Column(name = "member_level")
     private Integer memberLevel = 1;
-    
+
     public Long getId() {
         return id;
     }
@@ -253,11 +253,11 @@ public class User {
     public Boolean getDiscoverable() {
         return isDiscoverable;
     }
-    
+
     public Boolean getIsDiscoverable() {
         return isDiscoverable;
     }
-    
+
     public void setDiscoverable(Boolean discoverable) {
         isDiscoverable = discoverable;
     }
@@ -277,19 +277,19 @@ public class User {
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
     }
-    
+
     public Integer getBookingCount() {
         return bookingCount;
     }
-    
+
     public void setBookingCount(Integer bookingCount) {
         this.bookingCount = bookingCount;
     }
-    
+
     public Integer getMemberLevel() {
         return memberLevel;
     }
-    
+
     public void setMemberLevel(Integer memberLevel) {
         this.memberLevel = memberLevel;
     }
