@@ -2,26 +2,18 @@ package fpt.aptech.management_field.mappers;
 
 import fpt.aptech.management_field.models.LocationReview;
 import fpt.aptech.management_field.payload.dtos.LocationReviewDTO;
-import fpt.aptech.management_field.payload.dtos.UserDTO;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.factory.Mappers;
 
-import java.util.ArrayList;
 import java.util.List;
 
-public class LocationReviewMapper {
-    public static LocationReviewDTO mapToDTO(LocationReview locationReview) {
-        UserDTO user = UserMapper.mapToDTO(locationReview.getUser());
-        LocationReviewDTO locationReviewDTO = new LocationReviewDTO();
-        locationReviewDTO.setRating(locationReview.getRating());
-        locationReviewDTO.setComment(locationReview.getComment());
-        locationReviewDTO.setUser(user);
-        return locationReviewDTO;
-    }
+@Mapper(componentModel = "spring", uses = {UserMapper.class})
+public interface LocationReviewMapper {
+    LocationReviewMapper INSTANCE = Mappers.getMapper(LocationReviewMapper.class);
 
-    public static List<LocationReviewDTO> listToDTO(List<LocationReview> locationReviews) {
-        List<LocationReviewDTO> locationReviewDTOS = new ArrayList<>();
-        for (LocationReview locationReview : locationReviews) {
-            locationReviewDTOS.add(mapToDTO(locationReview));
-        }
-        return locationReviewDTOS;
-    }
+    @Mapping(source = "user", target = "user")
+    LocationReviewDTO toDto(LocationReview locationReview);
+
+    List<LocationReviewDTO> toDtoList(List<LocationReview> locationReviews);
 }

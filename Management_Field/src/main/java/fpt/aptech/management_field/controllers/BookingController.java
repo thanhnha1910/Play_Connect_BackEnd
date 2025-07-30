@@ -52,14 +52,12 @@ public class BookingController {
     @Autowired
     private FieldService fieldService;
 
-
-    
     @Autowired
     private PayPalPaymentService payPalPaymentService;
-    
+
     @Autowired
     private AIRecommendationService aiRecommendationService;
-    
+
     @Autowired
     private UserRepository userRepository;
 
@@ -107,9 +105,9 @@ public class BookingController {
             Long bookingId = Long.valueOf(orderId.replace("BOOKING_", ""));
             Booking booking = bookingService.confirmPayment(bookingId, token, payerId);
             return ResponseEntity.ok(Map.of(
-                "booking", booking,
-                "message", "Payment confirmed successfully",
-                "bookingId", booking.getBookingId()
+                    "booking", booking,
+                    "message", "Payment confirmed successfully",
+                    "bookingId", booking.getBookingId()
             ));
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid order ID format: " + e.getMessage()));
@@ -130,39 +128,39 @@ public class BookingController {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
-            
+
             String token = request.get("token");
             String payerId = request.get("payerId");
             String bookingIdStr = request.get("bookingId");
-            
+
             if (token == null || payerId == null || bookingIdStr == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Missing required parameters"));
             }
-            
+
             Long bookingId = Long.valueOf(bookingIdStr);
-            
+
             // Verify booking ownership
             Booking existingBooking = bookingService.getBookingById(bookingId);
             if (existingBooking == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Booking not found"));
             }
-            
+
             // Check if the authenticated user owns this booking
             if (!existingBooking.getUser().getId().equals(userId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You can only capture payment for your own bookings"));
+                        .body(Map.of("error", "You can only capture payment for your own bookings"));
             }
-            
+
             // Capture the payment through PayPal
             payPalPaymentService.capturePayment(bookingId, token, payerId);
-            
+
             // Update booking status
             Booking booking = bookingService.confirmPayment(bookingId, token, payerId);
-            
+
             return ResponseEntity.ok(Map.of(
-                "booking", booking,
-                "message", "Payment captured successfully",
-                "bookingId", booking.getBookingId()
+                    "booking", booking,
+                    "message", "Payment captured successfully",
+                    "bookingId", booking.getBookingId()
             ));
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid booking ID format: " + e.getMessage()));
@@ -186,55 +184,55 @@ public class BookingController {
         try {
             if (bookingId == null || bookingId.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "status", "error",
-                    "message", "Booking ID is required"
+                        "status", "error",
+                        "message", "Booking ID is required"
                 ));
             }
-            
+
             Long extractedBookingId = Long.valueOf(bookingId);
             Booking booking = bookingService.getBookingById(extractedBookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "status", "error",
-                    "message", "Booking not found"
+                        "status", "error",
+                        "message", "Booking not found"
                 ));
             }
-            
+
             // If booking is already confirmed, just return success with booking details
             if ("confirmed".equals(booking.getStatus())) {
                 return ResponseEntity.ok(Map.of(
-                    "status", "success",
-                    "booking", booking,
-                    "message", "Payment already completed successfully"
+                        "status", "success",
+                        "booking", booking,
+                        "message", "Payment already completed successfully"
                 ));
             }
-            
+
             // If booking is still pending, process the payment
             if ("pending".equals(booking.getStatus())) {
                 booking = bookingService.handlePaymentCallback(token, PayerID, bookingId);
                 return ResponseEntity.ok(Map.of(
-                    "status", "success",
-                    "booking", booking,
-                    "message", "Payment completed successfully"
+                        "status", "success",
+                        "booking", booking,
+                        "message", "Payment completed successfully"
                 ));
             }
-            
+
             // If booking is in any other state, return error
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", "Booking is in invalid state: " + booking.getStatus()
+                    "status", "error",
+                    "message", "Booking is in invalid state: " + booking.getStatus()
             ));
-            
+
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", "Invalid booking ID format"
+                    "status", "error",
+                    "message", "Invalid booking ID format"
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", e.getMessage()
+                    "status", "error",
+                    "message", e.getMessage()
             ));
         }
     }
@@ -244,8 +242,8 @@ public class BookingController {
             @RequestParam(required = false) String bookingId,
             HttpServletResponse response) throws IOException {
         // Redirect to frontend cancel page
-        String redirectUrl = "http://localhost:3000/en/booking/cancel?bookingId=" + 
-                            (bookingId != null ? bookingId : "");
+        String redirectUrl = "http://localhost:3000/en/booking/cancel?bookingId=" +
+                (bookingId != null ? bookingId : "");
         response.sendRedirect(redirectUrl);
     }
 
@@ -320,39 +318,39 @@ public class BookingController {
             System.out.println("=== DEBUG: Checking booking ID: " + bookingId + " ===");
             Booking booking = bookingService.getBookingById(bookingId);
             System.out.println("=== DEBUG: Booking found: " + (booking != null) + " ===");
-            
+
             if (booking == null) {
                 return ResponseEntity.ok(Map.of(
-                    "bookingId", bookingId,
-                    "exists", false,
-                    "message", "Booking not found"
+                        "bookingId", bookingId,
+                        "exists", false,
+                        "message", "Booking not found"
                 ));
             }
-            
+
             System.out.println("=== DEBUG: Booking status: " + booking.getStatus() + " ===");
-            
+
             return ResponseEntity.ok(Map.of(
-                "bookingId", booking.getBookingId(),
-                "exists", true,
-                "status", booking.getStatus(),
-                "userId", booking.getUser().getId(),
-                "fieldId", booking.getField().getFieldId(),
-                "fromTime", booking.getFromTime().toString(),
-                "toTime", booking.getToTime().toString(),
-                "paymentToken", booking.getPaymentToken(),
-                "message", "Booking found successfully"
+                    "bookingId", booking.getBookingId(),
+                    "exists", true,
+                    "status", booking.getStatus(),
+                    "userId", booking.getUser().getId(),
+                    "fieldId", booking.getField().getFieldId(),
+                    "fromTime", booking.getFromTime().toString(),
+                    "toTime", booking.getToTime().toString(),
+                    "paymentToken", booking.getPaymentToken(),
+                    "message", "Booking found successfully"
             ));
         } catch (Exception e) {
             System.err.println("=== DEBUG ERROR: " + e.getMessage() + " ===");
             e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to fetch booking: " + e.getMessage(),
-                "bookingId", bookingId,
-                "stackTrace", e.getClass().getSimpleName()
+                    "error", "Failed to fetch booking: " + e.getMessage(),
+                    "bookingId", bookingId,
+                    "stackTrace", e.getClass().getSimpleName()
             ));
         }
     }
-    
+
     // Authenticated endpoint to get booking details for receipt page
     @GetMapping("/details/{bookingId}")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
@@ -360,66 +358,66 @@ public class BookingController {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
-            
+
             Booking booking = bookingService.getBookingById(bookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking not found",
-                    "bookingId", bookingId
+                        "error", "Booking not found",
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Check if the authenticated user owns this booking
             if (!booking.getUser().getId().equals(userId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You can only view your own booking details"));
+                        .body(Map.of("error", "You can only view your own booking details"));
             }
-            
+
             return ResponseEntity.ok(Map.of(
-                "booking", booking,
-                "message", "Booking details retrieved successfully"
+                    "booking", booking,
+                    "message", "Booking details retrieved successfully"
             ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to fetch booking details: " + e.getMessage(),
-                "bookingId", bookingId
+                    "error", "Failed to fetch booking details: " + e.getMessage(),
+                    "bookingId", bookingId
             ));
         }
     }
 
- 
+
     @GetMapping("/receipt/{bookingId}")
     public ResponseEntity<?> getBookingReceipt(@PathVariable Long bookingId) {
         try {
             Booking booking = bookingService.getBookingById(bookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking not found",
-                    "bookingId", bookingId
+                        "error", "Booking not found",
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Only allow access to confirmed bookings for security
             if (!"confirmed".equals(booking.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking is not confirmed",
-                    "status", booking.getStatus(),
-                    "bookingId", bookingId
+                        "error", "Booking is not confirmed",
+                        "status", booking.getStatus(),
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Convert to DTO to avoid Hibernate proxy serialization issues
             BookingReceiptDTO receiptDTO = BookingMapper.mapToReceiptDTO(booking);
             return ResponseEntity.ok(Map.of(
-                "booking", receiptDTO,
-                "message", "Booking receipt retrieved successfully"
+                    "booking", receiptDTO,
+                    "message", "Booking receipt retrieved successfully"
             ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to fetch booking receipt: " + e.getMessage(),
-                "bookingId", bookingId
+                    "error", "Failed to fetch booking receipt: " + e.getMessage(),
+                    "bookingId", bookingId
             ));
         }
     }
@@ -458,8 +456,8 @@ public class BookingController {
     @Deprecated
     public ResponseEntity<?> capturePayPalPayment(@RequestBody Map<String, String> request) {
         return ResponseEntity.status(HttpStatus.GONE).body(Map.of(
-            "status", "error",
-            "message", "This endpoint is deprecated. Payment processing is now handled automatically via PayPal callback."
+                "status", "error",
+                "message", "This endpoint is deprecated. Payment processing is now handled automatically via PayPal callback."
         ));
     }
 
@@ -470,71 +468,71 @@ public class BookingController {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
-            
+
             Booking booking = bookingService.getBookingById(bookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking not found",
-                    "bookingId", bookingId
+                        "error", "Booking not found",
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Check if the authenticated user owns this booking
             if (!booking.getUser().getId().equals(userId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You can only get recommendations for your own bookings"));
+                        .body(Map.of("error", "You can only get recommendations for your own bookings"));
             }
-            
+
             // Get the current user
             User currentUser = booking.getUser();
-            
+
             // Get potential teammates (discoverable ROLE_USER only, excluding current user)
             List<User> potentialTeammates = userRepository.findDiscoverableRegularUsersExcludingUser(userId);
-            
+
             // Determine sport type from booking (you might need to add this field to Booking)
             // For now, we'll use a default sport type or extract from field name
             String sportType = "BONG_DA"; // Default to football/soccer
-            
+
             List<Map<String, Object>> recommendations;
-            
+
             // Always try to use AI service for real recommendations
             try {
                 recommendations = aiRecommendationService.recommendTeammates(currentUser, potentialTeammates, sportType);
-                
+
                 // Validate that AI service returned proper scores
                 boolean hasValidScores = recommendations.stream()
-                    .anyMatch(rec -> rec.containsKey("compatibilityScore") && 
-                             rec.get("compatibilityScore") instanceof Number &&
-                             ((Number) rec.get("compatibilityScore")).doubleValue() != 0.5);
-                
+                        .anyMatch(rec -> rec.containsKey("compatibilityScore") &&
+                                rec.get("compatibilityScore") instanceof Number &&
+                                ((Number) rec.get("compatibilityScore")).doubleValue() != 0.5);
+
                 if (!hasValidScores) {
                     throw new RuntimeException("AI service returned invalid or mock scores");
                 }
-                
+
             } catch (Exception e) {
                 logger.error("AI service failed, returning error instead of mock data: {}", e.getMessage());
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
-                    "error", "AI recommendation service is currently unavailable",
-                    "details", e.getMessage(),
-                    "bookingId", bookingId,
-                    "aiServiceAvailable", false
+                        "error", "AI recommendation service is currently unavailable",
+                        "details", e.getMessage(),
+                        "bookingId", bookingId,
+                        "aiServiceAvailable", false
                 ));
             }
-            
+
             return ResponseEntity.ok(Map.of(
-                "bookingId", bookingId,
-                "sportType", sportType,
-                "recommendations", recommendations,
-                "totalRecommendations", recommendations.size(),
-                "aiServiceAvailable", aiRecommendationService.isAIServiceAvailable(),
-                "message", "Teammate recommendations retrieved successfully"
+                    "bookingId", bookingId,
+                    "sportType", sportType,
+                    "recommendations", recommendations,
+                    "totalRecommendations", recommendations.size(),
+                    "aiServiceAvailable", aiRecommendationService.isAIServiceAvailable(),
+                    "message", "Teammate recommendations retrieved successfully"
             ));
-            
+
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to get teammate recommendations: " + e.getMessage(),
-                "bookingId", bookingId
+                    "error", "Failed to get teammate recommendations: " + e.getMessage(),
+                    "bookingId", bookingId
             ));
         }
     }
@@ -543,8 +541,8 @@ public class BookingController {
     @GetMapping("/test-endpoint")
     public ResponseEntity<?> testEndpoint() {
         return ResponseEntity.ok(Map.of(
-            "message", "Test endpoint working",
-            "timestamp", System.currentTimeMillis()
+                "message", "Test endpoint working",
+                "timestamp", System.currentTimeMillis()
         ));
     }
 }

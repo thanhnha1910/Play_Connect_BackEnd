@@ -27,7 +27,6 @@ public class Booking {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "bookings"})
     private User user;
 
-
     @Column(name = "from_time")
     private Instant fromTime;
     

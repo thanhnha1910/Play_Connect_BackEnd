@@ -1,13 +1,13 @@
 package fpt.aptech.management_field.mappers;
 
 import fpt.aptech.management_field.models.User;
-import fpt.aptech.management_field.payload.dtos.UserDTO;
+import fpt.aptech.management_field.payload.dtos.UserDto;
+import org.mapstruct.Mapper;
+import org.mapstruct.factory.Mappers;
 
-public class UserMapper {
-    public static UserDTO mapToDTO(User user) {
-        UserDTO userDTO = new UserDTO();
-        userDTO.setUsername(user.getUsername());
-        user.setProfilePicture(user.getProfilePicture());
-        return userDTO;
-    }
+@Mapper(componentModel = "spring")
+public interface UserMapper {
+    UserMapper INSTANCE = Mappers.getMapper(UserMapper.class);
+
+    UserDto toDto(User user);
 }

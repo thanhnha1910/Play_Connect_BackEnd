@@ -47,7 +47,6 @@ public class BookingService {
         }
     }
 
-
     @Autowired
     private FieldRepository fieldRepository;
 
@@ -59,6 +58,7 @@ public class BookingService {
 
     @Autowired
     private PayPalPaymentService payPalPaymentService;
+
     @Transactional
     public Map<String, Object> createBooking(Long userId, BookingRequest bookingRequest) {
         User user = userRepository.findById(userId)
@@ -69,24 +69,24 @@ public class BookingService {
         // Convert Instant to LocalDateTime for comparison with FieldClosure dates
         LocalDateTime fromTimeLocal = LocalDateTime.ofInstant(bookingRequest.getFromTime(), ZoneId.systemDefault());
         LocalDateTime toTimeLocal = LocalDateTime.ofInstant(bookingRequest.getToTime(), ZoneId.systemDefault());
-        
+
         // Custom validation for booking time (replacing @Future annotation)
         LocalDateTime nowLocal = LocalDateTime.now(ZoneId.systemDefault());
-        
+
         // Allow booking within 24 hours ahead, calculated in local timezone
         if (fromTimeLocal.isBefore(nowLocal.minusHours(1))) {
             throw new RuntimeException("Cannot book for past time slots");
         }
-        
+
         if (toTimeLocal.isBefore(fromTimeLocal)) {
             throw new RuntimeException("End time must be after start time");
         }
-        
+
         // Check if field is active
         if (field.getIsActive() == null || !field.getIsActive()) {
             throw new RuntimeException("Field is not available");
         }
-        
+
         // Check field closures
         List<FieldClosure> fieldClosures = field.getFieldClosures();
         if (fieldClosures != null) {
@@ -146,10 +146,10 @@ public class BookingService {
         booking.setPaymentToken(token);
         booking.setStatus("confirmed");
         Booking savedBooking = bookingRepository.save(booking);
-        
+
         // Publish booking confirmed event
         eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
-        
+
         return savedBooking;
     }
 
@@ -166,24 +166,24 @@ public class BookingService {
         BookingHistoryDto dto = new BookingHistoryDto();
         dto.setBookingId(booking.getBookingId());
         dto.setFieldName(booking.getField().getName());
-        
+
         // Get address from the location if available
         if (booking.getField().getLocation() != null) {
             dto.setFieldAddress(booking.getField().getLocation().getAddress());
         } else {
             dto.setFieldAddress("Address not available");
         }
-        
+
         // Set a default cover image or null if not available
         dto.setCoverImageUrl(null); // or set a default image URL
-        
+
         dto.setStartTime(booking.getFromTime());
         dto.setEndTime(booking.getToTime());
-        
+
         // Calculate total price - fix type conversion
         long hours = java.time.Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
         dto.setTotalPrice((double) (booking.getField().getHourlyRate() * hours));
-        
+
         dto.setStatus(booking.getStatus());
         return dto;
     }
@@ -221,34 +221,31 @@ public class BookingService {
                 // This assumes token contains booking info
                 throw new RuntimeException("Booking ID not provided in callback");
             }
-            
+
             // Capture the payment through PayPal
             payPalPaymentService.capturePayment(bookingId, token, payerId);
-            
+
             // Update booking status
             Booking booking = bookingRepository.findById(bookingId)
                     .orElseThrow(() -> new RuntimeException("Booking not found"));
-            
+
             if (!"pending".equals(booking.getStatus())) {
                 throw new RuntimeException("Booking is not in pending state");
             }
-            
+
             booking.setPaymentToken(token);
             booking.setStatus("confirmed");
-            
+
             Booking savedBooking = bookingRepository.save(booking);
-            
+
             // Publish booking confirmed event
             eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
-            
+
             return savedBooking;
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Payment callback processing failed: " + e.getMessage());
         }
     }
-
-
-
 
 }

@@ -82,7 +82,7 @@ public class User {
     
     @Column(name = "has_completed_profile", nullable = false, columnDefinition = "bit default 0")
     private boolean hasCompletedProfile = false; // Default to false for new users
-    
+
     public Long getId() {
         return id;
     }

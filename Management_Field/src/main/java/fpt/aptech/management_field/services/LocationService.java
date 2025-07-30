@@ -44,6 +44,9 @@ public class LocationService {
     private LocationReviewRepository locationReviewRepository;
     
     @Autowired
+    private LocationReviewMapper locationReviewMapper;
+    
+    @Autowired
     private BookingRepository bookingRepository;
     
     @Autowired
@@ -293,7 +296,7 @@ public class LocationService {
             System.out.println("Created " + typeDTOS.size() + " field type DTOs");
             
             List<LocationReview> locationReviews = locationReviewRepository.findByLocationId(location.getLocationId());
-            List<LocationReviewDTO> reviewDTOS = LocationReviewMapper.listToDTO(locationReviews);
+            List<LocationReviewDTO> reviewDTOS = locationReviewMapper.toDtoList(locationReviews);
             System.out.println("Found " + reviewDTOS.size() + " reviews");
 
             LocationDetailResponse response = new LocationDetailResponse();

@@ -27,6 +27,7 @@ public class Payment {
 
     @Column(name = "transaction_id")
     private String transactionId;
+
     @OneToOne
     @JoinColumn(name = "booking_id")
     private Booking booking;
