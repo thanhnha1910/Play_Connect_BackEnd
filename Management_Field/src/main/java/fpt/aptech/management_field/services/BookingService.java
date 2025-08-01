@@ -2,6 +2,7 @@ package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.events.BookingConfirmedEvent;
 import fpt.aptech.management_field.mappers.BookingMapper;
+import fpt.aptech.management_field.models.*;
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.BookingUser;
 import fpt.aptech.management_field.models.DraftMatch;
@@ -72,6 +73,10 @@ public class BookingService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private PaymentService paymentService;
+
     @Transactional
     public Map<String, Object> createBooking(Long userId, BookingRequest bookingRequest) {
         User user = userRepository.findById(userId)
@@ -202,7 +207,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
 
         dto.setStartTime(booking.getFromTime());
         dto.setEndTime(booking.getToTime());
-        
+
         // Calculate total price with discount - fix type conversion and add discount calculation
         long hours = java.time.Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
         double basePrice = booking.getField().getHourlyRate() * hours;
@@ -216,7 +221,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         } else {
             dto.setTotalPrice(basePrice);
         }
-        
+
         dto.setStatus(booking.getStatus());
         return dto;
     }
@@ -256,7 +261,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
             }
 
             // Capture the payment through PayPal
-            payPalPaymentService.capturePayment(bookingId, token, payerId);
+            payPalPaymentService.capturePayment(token);
 
             // Update booking status
             Booking booking = bookingRepository.findById(bookingId)

@@ -15,29 +15,24 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@IdClass(ParticipatingTeamId.class)
 public class ParticipatingTeam {
     @Id
-    @Column(name = "team_id")
-    private Long teamId;
-    
-    @Id
-    @Column(name = "tournament_id")
-    private Long tournamentId;
-    
+    @Column(name = "participating_team_id")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long participatingTeamId;
+
     @ManyToOne
-    @JoinColumn(name = "team_id", insertable = false, updatable = false)
+    @JoinColumn(name = "team_id")
     private Team team;
     
     @ManyToOne
-    @JoinColumn(name = "tournament_id", insertable = false, updatable = false)
+    @JoinColumn(name = "tournament_id")
     private Tournament tournament;
 
     @Column(name = "status")
     private String status;
 
-    @Column(name = "payment_token")
-    private String paymentToken;
-
-    
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JoinColumn(name = "entry_payment_id", referencedColumnName = "payment_id")
+    private Payment entryPayment;
 }

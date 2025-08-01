@@ -3,9 +3,9 @@ package fpt.aptech.management_field.exception;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public class ResourceNotFoundException extends ApiBaseException {
-    public ResourceNotFoundException(String message) {
+@ResponseStatus(HttpStatus.BAD_GATEWAY)
+public class PayPalPaymentException extends ApiBaseException {
+    public PayPalPaymentException(String message) {
         super(message);
     }
 }

@@ -1,6 +1,5 @@
 package fpt.aptech.management_field.controllers;
 
-
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.User;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
@@ -23,20 +22,14 @@ import fpt.aptech.management_field.payload.request.BookingRequest;
 import fpt.aptech.management_field.payload.response.MessageResponse;
 
 import jakarta.validation.Valid;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -44,7 +37,6 @@ import java.util.ArrayList;
 @RestController
 @RequestMapping("/api/booking")
 public class BookingController {
-
     private static final Logger logger = LoggerFactory.getLogger(BookingController.class);
     private static final double MINIMUM_COMPATIBILITY_THRESHOLD = 0.2;
 
@@ -101,6 +93,7 @@ public class BookingController {
         }
     }
 
+    // NOT USED
     @PostMapping("/confirm")
     public ResponseEntity<?> confirmPayment(
             @RequestParam String orderId,
@@ -125,6 +118,7 @@ public class BookingController {
         }
     }
 
+    // NOT USED
     @PostMapping("/capture-paypal-order")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
     public ResponseEntity<?> capturePayPalOrder(
@@ -157,7 +151,7 @@ public class BookingController {
             }
 
             // Capture the payment through PayPal
-            payPalPaymentService.capturePayment(bookingId, token, payerId);
+            payPalPaymentService.capturePayment(token);
 
             // Update booking status
             Booking booking = bookingService.confirmPayment(bookingId, token, payerId);
@@ -178,9 +172,7 @@ public class BookingController {
         }
     }
 
-    // DEPRECATED: This endpoint has been removed to eliminate redundant payment capture logic.
-    // All payment capture logic is now consolidated in the GET /success endpoint.
-
+    // USED BY PAYPAL AS RETURN URL
     @GetMapping("/payment-callback")
     public ResponseEntity<?> handlePaymentCallback(
             @RequestParam String token,
@@ -204,7 +196,7 @@ public class BookingController {
                 ));
             }
 
-            // If booking is already confirmed, just return success with booking details
+            // If booking is already confirmed, return success with booking details
             if ("confirmed".equals(booking.getStatus())) {
                 return ResponseEntity.ok(Map.of(
                         "status", "success",
@@ -242,6 +234,7 @@ public class BookingController {
         }
     }
 
+    // USED BY FRONEND IN booking/cancel
     @GetMapping("/payment-cancel")
     public void handlePaymentCancel(
             @RequestParam(required = false) String bookingId,
@@ -284,6 +277,7 @@ public class BookingController {
         }
     }
 
+    // NOT USED
     @GetMapping("/success")
     public void handlePaymentSuccess(
             @RequestParam String token,
@@ -298,7 +292,7 @@ public class BookingController {
 
             // --- SINGLE SOURCE OF TRUTH LOGIC ---
             // 1. Capture payment with PayPal
-            payPalPaymentService.capturePayment(longBookingId, token, PayerID);
+            payPalPaymentService.capturePayment(token);
 
             // 2. Confirm booking in local DB
             bookingService.confirmPayment(longBookingId, token, PayerID);
@@ -427,6 +421,7 @@ public class BookingController {
         }
     }
 
+    // MAIN ONE: RETURN URL AND FRONTEND: booking/success
     // New PayPal callback endpoint - single source of truth for payment processing
     @GetMapping("/paypal/callback")
     public void handlePayPalCallback(
@@ -439,7 +434,7 @@ public class BookingController {
 
             // --- SINGLE SOURCE OF TRUTH LOGIC ---
             // 1. Capture payment with PayPal
-            payPalPaymentService.capturePayment(longBookingId, token, payerId);
+            payPalPaymentService.capturePayment(token);
 
             // 2. Confirm booking in local DB
             bookingService.confirmPayment(longBookingId, token, payerId);
