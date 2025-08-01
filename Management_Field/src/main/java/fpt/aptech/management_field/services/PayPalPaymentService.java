@@ -47,11 +47,11 @@ public class PayPalPaymentService {
         requestBody.put("intent", "CAPTURE");
         requestBody.put("purchase_units", Collections.singletonList(Map.of(
                 "amount", Map.of(
-                        "currency_code", "USD",
+                        "currency_code", "VND",
                         "value", String.format("%.2f", amount)
                 ),
                 "description", description,
-                "reference_id", orderId
+                "reference_id", orderId    //
         )));
         requestBody.put("payment_source", Map.of("paypal", new HashMap<>()));
         requestBody.put("application_context", Map.of(

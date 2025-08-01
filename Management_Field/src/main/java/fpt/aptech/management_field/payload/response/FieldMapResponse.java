@@ -23,4 +23,41 @@ public class FieldMapResponse {
     private String typeName;
     private Long categoryId;
     private String categoryName;
+    
+    // Explicit setters for compatibility
+    public void setFieldId(Long fieldId) {
+        this.fieldId = fieldId;
+    }
+    
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
+    }
+    
+    public void setLatitude(BigDecimal latitude) {
+        this.latitude = latitude;
+    }
+    
+    public void setLongitude(BigDecimal longitude) {
+        this.longitude = longitude;
+    }
+    
+    public void setAddressShort(String addressShort) {
+        this.addressShort = addressShort;
+    }
+    
+    public void setTypeId(Long typeId) {
+        this.typeId = typeId;
+    }
+    
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
+    }
+    
+    public void setAverageRating(BigDecimal averageRating) {
+        this.averageRating = averageRating;
+    }
+    
+    public void setTypeName(String typeName) {
+        this.typeName = typeName;
+    }
 }

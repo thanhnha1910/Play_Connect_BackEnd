@@ -6,8 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
-@AllArgsConstructor
 @NoArgsConstructor
 public class ResetPasswordRequest {
     @NotBlank
@@ -20,4 +18,14 @@ public class ResetPasswordRequest {
     @NotBlank
     @Size(min = 6, max = 40)
     private String confirmPassword;
+    
+    // Getters
+    public String getToken() { return token; }
+    public String getPassword() { return password; }
+    public String getConfirmPassword() { return confirmPassword; }
+    
+    // Setters
+    public void setToken(String token) { this.token = token; }
+    public void setPassword(String password) { this.password = password; }
+    public void setConfirmPassword(String confirmPassword) { this.confirmPassword = confirmPassword; }
 }

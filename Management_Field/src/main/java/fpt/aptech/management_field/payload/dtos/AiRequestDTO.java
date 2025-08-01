@@ -9,4 +9,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AiRequestDTO {
     private String message;
+    
+    // Explicit setter for compatibility
+    public void setMessage(String message) {
+        this.message = message;
+    }
 }

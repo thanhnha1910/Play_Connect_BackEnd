@@ -32,6 +32,7 @@ public class OnboardingService {
     @Autowired
     private ObjectMapper objectMapper;
     
+    @Transactional
     public void processOnboarding(User user, OnboardingRequest request) throws Exception {
         System.out.println("DEBUG: OnboardingService.processOnboarding called");
         System.out.println("DEBUG: User: " + user.getEmail());
@@ -53,13 +54,65 @@ public class OnboardingService {
             Sport sport = getOrCreateSport(sportSelection);
             System.out.println("DEBUG: Sport processed: " + sport.getName() + " (" + sport.getSportCode() + ")");
             
-            // Handle tags creation/retrieval
+            // Handle tags creation/retrieval with "find or create" logic
+            Set<Tag> managedTags = new HashSet<>();
             List<String> tagNames = new ArrayList<>();
-            for (OnboardingRequest.TagSelectionDto tagSelection : sportSelection.getTags()) {
-                System.out.println("DEBUG: Processing tag: " + tagSelection.getTagName());
-                Tag tag = getOrCreateTag(tagSelection, sport);
-                tagNames.add(tag.getName());
-                System.out.println("DEBUG: Tag processed: " + tag.getName());
+            
+            if (sportSelection.getTags() != null) {
+                for (OnboardingRequest.TagSelectionDto tagSelection : sportSelection.getTags()) {
+                    System.out.println("DEBUG: Processing tag: " + tagSelection.getTagName());
+                    
+                    if (tagSelection.getTagId() != null) {
+                        // Use existing tag by ID
+                        Tag existingTag = tagRepository.findById(tagSelection.getTagId())
+                            .orElseThrow(() -> new RuntimeException("Tag not found with ID: " + tagSelection.getTagId()));
+                        managedTags.add(existingTag);
+                        tagNames.add(existingTag.getName());
+                        System.out.println("DEBUG: Using existing tag by ID: " + existingTag.getName());
+                    } else {
+                        // Implement "find or create" logic for new tags
+                        String tagName = tagSelection.getTagName();
+                        String sportCode = sport.getSportCode();
+                        
+                        // 1. Check if the tag already exists in the database
+                        Optional<Tag> existingTag = tagRepository.findByNameAndSport(tagName, sport);
+                        
+                        if (existingTag.isPresent()) {
+                            // 2a. If it exists, use the managed entity from the database
+                            managedTags.add(existingTag.get());
+                            tagNames.add(existingTag.get().getName());
+                            System.out.println("DEBUG: Found existing tag: " + existingTag.get().getName());
+                        } else {
+                            // 2b. If it does NOT exist, create a new Tag entity with improved race condition handling
+                            try {
+                                Tag newTag = new Tag();
+                                newTag.setName(tagName);
+                                newTag.setSport(sport);
+                                newTag.setIsActive(true);
+                                
+                                // Save the new tag to the DB to get an ID before associating it
+                                Tag savedTag = tagRepository.save(newTag);
+                                managedTags.add(savedTag);
+                                tagNames.add(savedTag.getName());
+                                System.out.println("DEBUG: Created new tag: " + savedTag.getName() + " with ID: " + savedTag.getId());
+                            } catch (Exception e) {
+                                // Handle duplicate key constraint violation or other database errors
+                                System.out.println("DEBUG: Tag creation failed, attempting to fetch existing tag: " + e.getMessage());
+                                
+                                // Try to find the tag that might have been created by another thread
+                                Optional<Tag> raceConditionTag = tagRepository.findByNameAndSport(tagName, sport);
+                                if (raceConditionTag.isPresent()) {
+                                    managedTags.add(raceConditionTag.get());
+                                    tagNames.add(raceConditionTag.get().getName());
+                                    System.out.println("DEBUG: Found tag created by another thread: " + raceConditionTag.get().getName());
+                                } else {
+                                    // If still not found, provide more detailed error information
+                                    throw new RuntimeException("Failed to create or find tag: " + tagName + " for sport: " + sport.getName() + ". Original error: " + e.getMessage(), e);
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             // Create SportProfileDto
@@ -118,29 +171,7 @@ public class OnboardingService {
         }
     }
     
-    private Tag getOrCreateTag(OnboardingRequest.TagSelectionDto tagSelection, Sport sport) {
-        if (tagSelection.getTagId() != null) {
-            // Use existing tag
-            return tagRepository.findById(tagSelection.getTagId())
-                .orElseThrow(() -> new RuntimeException("Tag not found with ID: " + tagSelection.getTagId()));
-        } else {
-            // Create new tag
-            String tagName = tagSelection.getTagName();
-            
-            // Check if tag with this name already exists for this sport
-            Optional<Tag> existingTag = tagRepository.findByNameAndSport(tagName, sport);
-            if (existingTag.isPresent()) {
-                return existingTag.get();
-            }
-            
-            Tag newTag = new Tag();
-            newTag.setName(tagName);
-            newTag.setSport(sport);
-            newTag.setIsActive(true);
-            
-            return tagRepository.save(newTag);
-        }
-    }
+
     
     private String generateSportCode(String sportName) {
         // Convert to uppercase and replace spaces/special chars with underscores

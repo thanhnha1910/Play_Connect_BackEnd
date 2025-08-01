@@ -11,4 +11,13 @@ public class AiResponseDTO {
     private String intent;
     private String response;
     private String confidence;
+    
+    // Explicit getters for compatibility
+    public String getIntent() {
+        return intent;
+    }
+    
+    public String getResponse() {
+        return response;
+    }
 }

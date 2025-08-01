@@ -27,4 +27,41 @@ public class UpsertFieldRequest {
     
     @Positive(message = "Hourly rate must be positive")
     private Integer hourlyRate;
+    
+    private String thumbnailUrl;
+    
+    private String imageGallery; // JSON string of URLs
+    
+    // Explicit getters for compatibility
+    public Long getLocationId() {
+        return locationId;
+    }
+    
+    public Long getTypeId() {
+        return typeId;
+    }
+    
+    public String getName() {
+        return name;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    public Boolean getIsActive() {
+        return isActive;
+    }
+    
+    public Integer getHourlyRate() {
+        return hourlyRate;
+    }
+    
+    public String getThumbnailUrl() {
+        return thumbnailUrl;
+    }
+    
+    public String getImageGallery() {
+        return imageGallery;
+    }
 }

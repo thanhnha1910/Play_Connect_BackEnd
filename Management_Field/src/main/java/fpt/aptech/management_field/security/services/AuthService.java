@@ -51,6 +51,9 @@ public class AuthService {
         user.setAddress(request.getAddress());
         user.setStatus(UserStatus.PENDING_APPROVAL); // Owner needs approval
         user.setEmailVerified(true); // Auto-verify for owners
+        // Khởi tạo memberLevel và bookingCount
+        user.setMemberLevel(0);
+        user.setBookingCount(0);
         
         // Set ROLE_OWNER
         Set<Role> roles = new HashSet<>();

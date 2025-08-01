@@ -1,20 +1,32 @@
 package fpt.aptech.management_field.mappers;
 
 import fpt.aptech.management_field.models.Booking;
+import fpt.aptech.management_field.models.OpenMatch;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
 import fpt.aptech.management_field.payload.dtos.BookingReceiptDTO;
+import fpt.aptech.management_field.repositories.OpenMatchRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+@Component
 public class BookingMapper {
-    public static BookingDTO mapToDTO(Booking booking) {
+    
+    @Autowired
+    private OpenMatchRepository openMatchRepository;
+    public BookingDTO mapToDTO(Booking booking , int basePrice, int discountPercent, int discountAmount, int totalPrice) {
         BookingDTO bookingDTO = new BookingDTO();
         bookingDTO.setFromTime(booking.getFromTime());
         bookingDTO.setToTime(booking.getToTime());
         bookingDTO.setSlots(booking.getSlots());
         bookingDTO.setStatus(booking.getStatus());
+                bookingDTO.setBasePrice(basePrice);
+        bookingDTO.setDiscountPercent(discountPercent);
+        bookingDTO.setDiscountAmount(discountAmount);
+        bookingDTO.setTotalPrice(totalPrice);
         
         // Set customer information if booking has users
         if (booking.getBookingUsers() != null && !booking.getBookingUsers().isEmpty()) {
@@ -29,15 +41,34 @@ public class BookingMapper {
         return bookingDTO;
     }
 
-    public static List<BookingDTO> listToDTO(List<Booking> bookings) {
+    @Autowired
+    private fpt.aptech.management_field.services.UserService userService;
+    
+    public List<BookingDTO> listToDTO(List<Booking> bookings) {
         List<BookingDTO> bookingDTOS = new ArrayList<>();
         for (Booking booking : bookings) {
-            bookingDTOS.add(mapToDTO(booking));
+            // Calculate proper pricing with discount
+            long hours = Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
+            int basePrice = booking.getField().getHourlyRate() * (int) hours;
+            
+            // Apply discount if user has memberLevel
+            int discountPercent = 0;
+            int discountAmount = 0;
+            int totalPrice = basePrice;
+            
+            if (booking.getUser() != null) {
+                Integer memberLevel = booking.getUser().getMemberLevel();
+                discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
+                discountAmount = basePrice * discountPercent / 100;
+                totalPrice = basePrice - discountAmount;
+            }
+            
+            bookingDTOS.add(mapToDTO(booking, basePrice, discountPercent, discountAmount, totalPrice));
         }
         return bookingDTOS;
     }
     
-    public static BookingReceiptDTO mapToReceiptDTO(Booking booking) {
+    public BookingReceiptDTO mapToReceiptDTO(Booking booking) {
         BookingReceiptDTO receiptDTO = new BookingReceiptDTO();
         
         // Basic booking information
@@ -80,14 +111,35 @@ public class BookingMapper {
             }
         }
         
-        // Calculate duration and total price
+        // Calculate duration and total price with discount
         if (booking.getFromTime() != null && booking.getToTime() != null) {
             long hours = Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
             receiptDTO.setDurationHours(hours);
             
             if (booking.getField() != null && booking.getField().getHourlyRate() != null) {
-                receiptDTO.setTotalPrice((double) (booking.getField().getHourlyRate() * hours));
+                double basePrice = booking.getField().getHourlyRate() * hours;
+                
+                // Apply discount if user has memberLevel
+                if (booking.getUser() != null) {
+                    Integer memberLevel = booking.getUser().getMemberLevel();
+                    int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
+                    double discountAmount = basePrice * discountPercent / 100;
+                    receiptDTO.setTotalPrice(basePrice - discountAmount);
+                } else {
+                    receiptDTO.setTotalPrice(basePrice);
+                }
             }
+        }
+        
+        // Open match information (if exists)
+        OpenMatch openMatch = openMatchRepository.findByBookingId(booking.getBookingId());
+        if (openMatch != null) {
+            BookingReceiptDTO.OpenMatchSummaryDto openMatchDto = new BookingReceiptDTO.OpenMatchSummaryDto();
+            openMatchDto.setId(openMatch.getId());
+            openMatchDto.setSportType(openMatch.getSportType());
+            openMatchDto.setSlotsNeeded(openMatch.getSlotsNeeded());
+            openMatchDto.setStatus(openMatch.getStatus());
+            receiptDTO.setOpenMatch(openMatchDto);
         }
         
         return receiptDTO;

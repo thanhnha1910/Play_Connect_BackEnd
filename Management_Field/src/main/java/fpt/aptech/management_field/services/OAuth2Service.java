@@ -289,6 +289,16 @@ public class OAuth2Service {
                 user.setProvider(AuthProvider.valueOf(provider.toUpperCase()));
                 user.setProviderId(providerId);
             }
+            
+            // CRITICAL FIX: Ensure existing user has at least ROLE_USER
+            if (user.getRoles() == null || user.getRoles().isEmpty()) {
+                Set<Role> roles = new HashSet<>();
+                Role userRole = roleRepository.findByName(ERole.ROLE_USER)
+                    .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+                roles.add(userRole);
+                user.setRoles(roles);
+                logger.info("Assigned default ROLE_USER to existing user: {}", user.getEmail());
+            }
         } else {
             // Create new user
             user = new User();
@@ -302,6 +312,9 @@ public class OAuth2Service {
             user.setActive(true);
             // No password for OAuth2 users
             user.setPassword(null);
+            // Khởi tạo memberLevel và bookingCount
+            user.setMemberLevel(0);
+            user.setBookingCount(0);
 
             // Assign default role
             Set<Role> roles = new HashSet<>();

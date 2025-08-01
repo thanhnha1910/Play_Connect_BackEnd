@@ -188,6 +188,9 @@ package fpt.aptech.management_field.controllers;
             user.setFullName(signUpRequest.getFullName());
             user.setPhoneNumber(signUpRequest.getPhoneNumber());
             user.setAddress(signUpRequest.getAddress());
+            // Khởi tạo memberLevel và bookingCount
+            user.setMemberLevel(0);
+            user.setBookingCount(0);
 
             String token = UUID.randomUUID().toString();
             user.setVerificationToken(token);
@@ -443,5 +446,31 @@ package fpt.aptech.management_field.controllers;
                     })
                     .orElseThrow(() -> new TokenRefreshException(requestRefreshToken,
                             "Refresh token is not in database!"));
+        }
+
+        @PostMapping("/fix-users-without-roles")
+        public ResponseEntity<?> fixUsersWithoutRoles() {
+            try {
+                List<User> allUsers = userRepository.findAll();
+                int fixedCount = 0;
+                
+                for (User user : allUsers) {
+                    if (user.getRoles() == null || user.getRoles().isEmpty()) {
+                        Set<Role> roles = new HashSet<>();
+                        Role userRole = roleRepository.findByName(ERole.ROLE_USER)
+                            .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+                        roles.add(userRole);
+                        user.setRoles(roles);
+                        userRepository.save(user);
+                        fixedCount++;
+                        System.out.println("Fixed user without roles: " + user.getEmail());
+                    }
+                }
+                
+                return ResponseEntity.ok(new MessageResponse("Fixed " + fixedCount + " users without roles."));
+            } catch (Exception e) {
+                return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Error fixing users: " + e.getMessage()));
+            }
         }
     }

@@ -18,6 +18,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     
     Optional<User> findByEmail(String email);
     
+    Optional<User> findByPhoneNumber(String phoneNumber);
+    
     Boolean existsByUsername(String username);
     
     Boolean existsByEmail(String email);
@@ -36,4 +38,18 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     
     @Query("SELECT u FROM User u JOIN u.roles r WHERE u.isDiscoverable = true AND r.name = 'ROLE_USER' AND u.id != :currentUserId")
     List<User> findDiscoverableRegularUsersExcludingUser(@Param("currentUserId") Long currentUserId);
+    
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE " +
+           "u.isDiscoverable = true AND r.name = 'ROLE_USER' AND u.id != :excludeUserId AND " +
+           "(:sportType IS NULL OR u.sportProfiles LIKE CONCAT('%', :sportType, '%'))")
+    List<User> findPotentialTeammates(
+            @Param("sportType") String sportType,
+            @Param("skillLevel") String skillLevel,
+            @Param("location") String location,
+            @Param("maxDistance") Double maxDistance,
+            @Param("genderPreference") String genderPreference,
+            @Param("minAge") Integer minAge,
+            @Param("maxAge") Integer maxAge,
+            @Param("excludeUserId") Long excludeUserId
+    );
 }

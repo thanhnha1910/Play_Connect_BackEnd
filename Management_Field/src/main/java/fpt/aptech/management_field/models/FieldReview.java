@@ -21,6 +21,7 @@ public class FieldReview {
     
     private BigDecimal rating;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String comment;
     
     @ManyToOne

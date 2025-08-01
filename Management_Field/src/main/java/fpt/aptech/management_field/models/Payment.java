@@ -23,6 +23,7 @@ public class Payment {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String method;
 
     @Column(name = "transaction_id")

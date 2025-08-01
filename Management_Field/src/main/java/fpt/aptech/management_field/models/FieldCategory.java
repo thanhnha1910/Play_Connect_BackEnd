@@ -19,8 +19,10 @@ public class FieldCategory {
     @Column(name = "category_id")
     private Long categoryId;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String name;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String description;
 
     @OneToMany(mappedBy = "category")
@@ -30,4 +32,13 @@ public class FieldCategory {
     @ManyToOne
     @JoinColumn(name = "location_id")
     private Location location;
+    
+    // Explicit getters for compatibility
+    public String getDescription() {
+        return description;
+    }
+    
+    public String getName() {
+        return name;
+    }
 }

@@ -89,7 +89,13 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/locations/**").permitAll()
                         .requestMatchers("/api/sports/**").permitAll()
                         .requestMatchers("/api/chatbot/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll() // Allow public access to uploaded files
+                        .requestMatchers(HttpMethod.GET, "/api/open-matches").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/open-matches/booking/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/draft-matches").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // WebSocket endpoints - permit handshake, authentication handled by interceptor
+                        .requestMatchers("/ws/**").permitAll()
                         // PayPal specific endpoints that need to be public
                         .requestMatchers("/api/booking/payment-callback").permitAll() // PayPal callback
                         .requestMatchers("/api/booking/payment-cancel").permitAll() // PayPal cancel

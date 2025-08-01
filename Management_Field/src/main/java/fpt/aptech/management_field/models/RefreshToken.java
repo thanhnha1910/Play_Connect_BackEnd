@@ -29,4 +29,9 @@ public class RefreshToken {
     
     @Column(nullable = false)
     private Instant expiryDate;
+    
+    // Explicit getter for compatibility
+    public String getToken() {
+        return token;
+    }
 }
