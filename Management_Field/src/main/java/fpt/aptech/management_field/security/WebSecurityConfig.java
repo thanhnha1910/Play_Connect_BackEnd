@@ -113,6 +113,9 @@ public class WebSecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        .requestMatchers("uploads/**").permitAll()
+                        .requestMatchers("/api/tournament/**").permitAll()
+                        .requestMatchers("/api/teams/**").permitAll()
                         // All other booking endpoints require authentication (including POST /api/booking)
                         .requestMatchers(HttpMethod.POST, "/api/booking").authenticated() // POST to create booking requires auth
                         .requestMatchers(HttpMethod.PUT, "/api/booking/**").authenticated() // PUT requires auth

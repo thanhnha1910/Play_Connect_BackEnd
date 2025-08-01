@@ -1,5 +1,7 @@
 package fpt.aptech.management_field.services;
 
+import fpt.aptech.management_field.exception.PayPalPaymentException;
+import fpt.aptech.management_field.payload.response.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
@@ -10,7 +12,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -34,10 +35,21 @@ public class PayPalPaymentService {
         this.restTemplate = restTemplateBuilder.build();
     }
 
-    public String initiatePayPalPayment(Long bookingId, float amount) {
+    /**
+     * Initiates a PayPal payment by creating a new order.
+     * This method constructs a request to the PayPal API to create a payment order
+     * with the specified amount and a description. It then returns the approval URL
+     * that the user should be redirected to for completing the payment.
+     *
+     * @param paymentId The unique identifier for the payment.
+     * @param amount    The amount to be paid.
+     * @return The PayPal approval URL for the created order.
+     * @throws PayPalPaymentException if the request to PayPal fails or the approval URL is not found.
+     */
+    public PayPalOrderCreationResponse initiatePayPalPayment(Long paymentId, float amount) {
         String accessToken = getAccessToken();
-        String orderId = "BOOKING_" + bookingId;
-        String description = "Thanh toán đặt sân Booking ID: " + bookingId;
+        String orderId = "PAYMENT_" + paymentId;
+        String description = "Thanh toán cho payment: " + paymentId;
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -55,137 +67,94 @@ public class PayPalPaymentService {
         )));
         requestBody.put("payment_source", Map.of("paypal", new HashMap<>()));
         requestBody.put("application_context", Map.of(
-                "return_url", "http://localhost:1444/api/booking/paypal/callback?bookingId=" + bookingId,
-                "cancel_url", "http://localhost:3000/en/booking/cancel?bookingId=" + bookingId
+                "return_url", String.format("http://localhost:1444/api/payment/paypal/callback?paymentId=%d", paymentId),
+                "cancel_url", String.format("http://localhost:1444/api/payment/paypal/cancel?paymentId=%d", paymentId)
         ));
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
         String url = paypalUrl + "/v2/checkout/orders";
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+        ResponseEntity<PayPalOrderCreationResponse> response = restTemplate.postForEntity(url, entity, PayPalOrderCreationResponse.class);
 
-        if (response.getStatusCode().is2xxSuccessful()) {
-            Map<String, Object> body = response.getBody();
-            System.out.println("PayPal Response: " + body);
-            return ((List<Map<String, Object>>) body.get("links"))
-                    .stream()
-                    .filter(link -> "payer-action".equals(link.get("rel")))
-                    .findFirst()
-                    .map(link -> (String) link.get("href"))
-                    .orElseThrow(() -> new RuntimeException("Approval URL not found"));
-        } else {
-            System.err.println("PayPal Error: " + response.getStatusCode() + " - " + response.getBody());
-            throw new RuntimeException("PayPal payment initiation failed: " + response.getBody());
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new PayPalPaymentException("Failed to make request to PayPal: " + url + response.getStatusCode());
         }
+
+        PayPalOrderCreationResponse body = response.getBody();
+        if (body == null) {
+            throw new PayPalPaymentException("PayPal response is null: " + response.getBody());
+        }
+        return body;
     }
 
-    public void capturePayment(Long bookingId, String token, String payerId) {
-        // For development/testing: Skip actual PayPal capture for test tokens
-        System.out.println("=== PayPal Capture Debug ===");
-        System.out.println("BookingID: " + bookingId);
-        System.out.println("Token: " + token);
-        System.out.println("PayerID: " + payerId);
-        
+    /**
+     * Captures the payment for a previously created PayPal order.
+     * This method sends a request to the PayPal API to capture the funds for a given order token.
+     * It is called after the user has approved the payment on the PayPal platform.
+     * For development purposes, it can skip the actual capture for test tokens.
+     *
+     * @param orderId The order token received from PayPal after payment approval.
+     * @return A {@link PayPalCaptureResponse} containing the details of the captured payment.
+     * @throws PayPalPaymentException if the request to PayPal fails.
+     */
+    public PayPalCaptureResponse capturePayment(String orderId) {
         // For development: Skip actual PayPal capture for test tokens
-        if (isTestToken(token, payerId)) {
+        if (isTestToken(orderId)) {
             System.out.println("Test token detected - skipping actual PayPal capture");
-            return; // Skip actual PayPal API call for test tokens
+            PayPalCaptureResponse mockResponse = new PayPalCaptureResponse();
+            mockResponse.setStatus("COMPLETED");
+            mockResponse.setOrderId(orderId);
+            return mockResponse;
         }
-        
+
         String accessToken = getAccessToken();
-        
-        // Use the token as orderId since PayPal returns the actual order ID in the token parameter
-        String orderId = token;
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(accessToken);
 
         HttpEntity<String> entity = new HttpEntity<>("", headers);
+
+        // Use the token as orderId since PayPal returns the actual order ID in the token parameter
         String url = paypalUrl + "/v2/checkout/orders/" + orderId + "/capture";
-        
-        try {
-            System.out.println("Making PayPal capture API call to: " + url);
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-            
-            if (response.getStatusCode().is2xxSuccessful()) {
-                System.out.println("PayPal Capture Success: " + response.getBody());
-            } else {
-                System.err.println("PayPal Capture Error: " + response.getStatusCode() + " - " + response.getBody());
-                throw new RuntimeException("PayPal payment capture failed: " + response.getBody());
-            }
-        } catch (Exception e) {
-            System.err.println("PayPal Capture Exception: " + e.getMessage());
-            throw new RuntimeException("PayPal payment capture failed: " + e.getMessage());
+
+        ResponseEntity<PayPalCaptureResponse> response = restTemplate.postForEntity(url, entity, PayPalCaptureResponse.class);
+        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new PayPalPaymentException("Failed to capture payment: " + url + response.getStatusCode());
         }
+        
+        return response.getBody();
     }
 
-    public boolean verifyPaymentWithPayPal(String orderId, String payerId) {
-        // For development/testing: Allow test tokens to bypass PayPal verification
-        System.out.println("=== PayPal Verification Debug ===");
-        System.out.println("OrderID: " + orderId);
-        System.out.println("PayerID: " + payerId);
-        
-        // For development: Allow test tokens to bypass verification
-        if (isTestToken(orderId, payerId)) {
-            System.out.println("Test token detected - bypassing PayPal verification");
-            return true;
-        }
-        
-        try {
-            String accessToken = getAccessToken();
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(accessToken);
-            
-            HttpEntity<String> entity = new HttpEntity<>("", headers);
-            String url = paypalUrl + "/v2/checkout/orders/" + orderId;
-            
-            System.out.println("Making PayPal API call to: " + url);
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-            
-            if (response.getStatusCode().is2xxSuccessful()) {
-                Map<String, Object> orderDetails = response.getBody();
-                System.out.println("PayPal API Response: " + orderDetails);
-                
-                String status = (String) orderDetails.get("status");
-                
-                // Verify that the order is approved/completed and ready for capture
-                boolean isApproved = "APPROVED".equals(status) || "COMPLETED".equals(status);
-                
-                // Additional verification: check if payer information matches
-                Map<String, Object> payer = (Map<String, Object>) orderDetails.get("payer");
-                boolean payerMatches = payer != null && payerId.equals(payer.get("payer_id"));
-                
-                System.out.println("PayPal Order Verification - Status: " + status + ", PayerID Match: " + payerMatches);
-                System.out.println("Expected PayerID: " + payerId + ", Actual PayerID: " + (payer != null ? payer.get("payer_id") : "null"));
-                
-                return isApproved && payerMatches;
-            } else {
-                System.err.println("PayPal Verification Error: " + response.getStatusCode() + " - " + response.getBody());
-                return false;
-            }
-        } catch (Exception e) {
-            System.err.println("PayPal Verification Exception: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-    
     /**
-     * Check if the provided token and payerId are test values for development
+     * Checks if the provided token is a test token for development purposes.
+     * This method allows bypassing actual PayPal API calls during development and testing.
+     * It checks for common test token patterns, specific test token values, and token length.
+     *
+     * @param token The token to check.
+     * @return {@code true} if the token is identified as a test token, {@code false} otherwise.
      */
-    private boolean isTestToken(String token, String payerId) {
+    private boolean isTestToken(String token) {
         // Allow common test tokens to bypass verification
-        return token != null && (token.startsWith("test_") || 
-                                token.startsWith("TEST_") ||
-                                token.equals("test-token") ||
-                                token.equals("5SS09998604657458") || // Add specific test token
-                                token.length() < 10); // Very short tokens are likely test tokens
+        return token != null && (token.startsWith("test_") ||
+                token.startsWith("TEST_") ||
+                token.equals("test-token") ||
+                token.equals("5SS09998604657458") || // Add specific test token
+                token.length() < 10); // Very short tokens are likely test tokens
     }
-    
 
-    public String getAccessToken() {
+    /**
+     * Retrieves an access token from the PayPal API.
+     * This method sends a POST request to the PayPal OAuth2 token endpoint
+     * with the client ID and secret to get a bearer token. This token is
+     * required for all further API calls.
+     *
+     * @return The access token string.
+     * @throws PayPalPaymentException if the request to PayPal fails or returns a non-2xx status code.
+     */
+    private String getAccessToken() {
+        // Set up headers, request body, and URL for the token request.
+        String tokenUrl = paypalUrl + "/v1/oauth2/token";
+
         HttpHeaders headers = new HttpHeaders();
         headers.setBasicAuth(clientId, clientSecret);
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -194,14 +163,18 @@ public class PayPalPaymentService {
         params.add("grant_type", "client_credentials");
 
         HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(params, headers);
-        String tokenUrl = paypalUrl + "/v1/oauth2/token";
-        ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, entity, Map.class);
 
-        if (response.getStatusCode().is2xxSuccessful()) {
-            return (String) response.getBody().get("access_token");
-        } else {
-            System.err.println("Token Error: " + response.getStatusCode() + " - " + response.getBody());
-            throw new RuntimeException("Failed to get PayPal access token: " + response.getBody());
+        // Send the POST request to the PayPal API to get the access token.
+        ResponseEntity<PaypalTokenResponse> response = restTemplate.postForEntity(tokenUrl, entity, PaypalTokenResponse.class);
+
+        // Check if the request was successful (HTTP 2xx) and get the access token.
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new PayPalPaymentException("Failed to make request to PayPal: " + tokenUrl + response.getStatusCode());
         }
+        PaypalTokenResponse tokenResponse = response.getBody();
+        if (tokenResponse == null || tokenResponse.getAccessToken() == null) {
+            throw new PayPalPaymentException("Failed to get PayPal access token: " + tokenResponse);
+        }
+        return tokenResponse.getAccessToken();
     }
 }

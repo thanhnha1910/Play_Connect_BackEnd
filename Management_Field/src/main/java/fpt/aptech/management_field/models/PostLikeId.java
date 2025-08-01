@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 import java.io.Serializable;
 
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
-public class ParticipatingTeamId implements Serializable {
-    private Long teamId;
-    private Long tournamentId;
+@NoArgsConstructor
+public class PostLikeId implements Serializable {
+    private Long userId;
+    private Long postId;
 }

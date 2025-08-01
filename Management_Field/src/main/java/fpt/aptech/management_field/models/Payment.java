@@ -17,18 +17,32 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "payment_id")
     private Long paymentId;
-    
+
+    @Column(name = "total")
     private Integer total;
-    
+
+    @Column(name = "method")
+    @Enumerated(EnumType.STRING)
+    private PaymentMethod method;
+
+    @Column(name = "status")
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus status;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     
-    @Column(columnDefinition = "NVARCHAR(MAX)")
-    private String method;
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     @Column(name = "transaction_id")
     private String transactionId;
-    @OneToOne
-    @JoinColumn(name = "booking_id")
-    private Booking booking;
+
+    @Column(name = "payable_id")
+    private Long payableId;
+
+    @Column(name = "payable_type")
+    @Enumerated(EnumType.STRING)
+    private PaymentPayable payableType;
 }
+

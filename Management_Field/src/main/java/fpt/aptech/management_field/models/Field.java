@@ -43,6 +43,7 @@ public class Field {
     @ManyToOne
     @JoinColumn(name = "location_id")
     private Location location;
+
     @Column(name = "is_active")
     private Boolean isActive;
     

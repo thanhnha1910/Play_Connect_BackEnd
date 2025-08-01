@@ -1,5 +1,6 @@
 package fpt.aptech.management_field.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -31,6 +32,8 @@ public class Location {
     
     @Column(columnDefinition = "NVARCHAR(MAX)")
     private String address;
+    private String city;
+    private String country;
     
     @Column(precision = 8, scale = 6)
     private BigDecimal latitude;
@@ -40,6 +43,7 @@ public class Location {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
+    @JsonIgnore
     private Owner owner;
     
     @Column(name = "thumbnail_url")

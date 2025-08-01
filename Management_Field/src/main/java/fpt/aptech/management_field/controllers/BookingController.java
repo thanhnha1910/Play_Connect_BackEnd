@@ -1,6 +1,5 @@
 package fpt.aptech.management_field.controllers;
 
-
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.User;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
@@ -23,20 +22,14 @@ import fpt.aptech.management_field.payload.request.BookingRequest;
 import fpt.aptech.management_field.payload.response.MessageResponse;
 
 import jakarta.validation.Valid;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -44,7 +37,6 @@ import java.util.ArrayList;
 @RestController
 @RequestMapping("/api/booking")
 public class BookingController {
-
     private static final Logger logger = LoggerFactory.getLogger(BookingController.class);
     private static final double MINIMUM_COMPATIBILITY_THRESHOLD = 0.2;
 
@@ -54,17 +46,15 @@ public class BookingController {
     @Autowired
     private FieldService fieldService;
 
-
-    
     @Autowired
     private PayPalPaymentService payPalPaymentService;
-    
+
     @Autowired
     private BookingMapper bookingMapper;
-    
+
     @Autowired
     private AIRecommendationService aiRecommendationService;
-    
+
     @Autowired
     private UserRepository userRepository;
 
@@ -103,6 +93,7 @@ public class BookingController {
         }
     }
 
+    // NOT USED
     @PostMapping("/confirm")
     public ResponseEntity<?> confirmPayment(
             @RequestParam String orderId,
@@ -112,9 +103,9 @@ public class BookingController {
             Long bookingId = Long.valueOf(orderId.replace("BOOKING_", ""));
             Booking booking = bookingService.confirmPayment(bookingId, token, payerId);
             return ResponseEntity.ok(Map.of(
-                "booking", booking,
-                "message", "Payment confirmed successfully",
-                "bookingId", booking.getBookingId()
+                    "booking", booking,
+                    "message", "Payment confirmed successfully",
+                    "bookingId", booking.getBookingId()
             ));
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid order ID format: " + e.getMessage()));
@@ -127,6 +118,7 @@ public class BookingController {
         }
     }
 
+    // NOT USED
     @PostMapping("/capture-paypal-order")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
     public ResponseEntity<?> capturePayPalOrder(
@@ -135,39 +127,39 @@ public class BookingController {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
-            
+
             String token = request.get("token");
             String payerId = request.get("payerId");
             String bookingIdStr = request.get("bookingId");
-            
+
             if (token == null || payerId == null || bookingIdStr == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Missing required parameters"));
             }
-            
+
             Long bookingId = Long.valueOf(bookingIdStr);
-            
+
             // Verify booking ownership
             Booking existingBooking = bookingService.getBookingById(bookingId);
             if (existingBooking == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Booking not found"));
             }
-            
+
             // Check if the authenticated user owns this booking
             if (!existingBooking.getUser().getId().equals(userId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You can only capture payment for your own bookings"));
+                        .body(Map.of("error", "You can only capture payment for your own bookings"));
             }
-            
+
             // Capture the payment through PayPal
-            payPalPaymentService.capturePayment(bookingId, token, payerId);
-            
+            payPalPaymentService.capturePayment(token);
+
             // Update booking status
             Booking booking = bookingService.confirmPayment(bookingId, token, payerId);
-            
+
             return ResponseEntity.ok(Map.of(
-                "booking", booking,
-                "message", "Payment captured successfully",
-                "bookingId", booking.getBookingId()
+                    "booking", booking,
+                    "message", "Payment captured successfully",
+                    "bookingId", booking.getBookingId()
             ));
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid booking ID format: " + e.getMessage()));
@@ -180,9 +172,7 @@ public class BookingController {
         }
     }
 
-    // DEPRECATED: This endpoint has been removed to eliminate redundant payment capture logic.
-    // All payment capture logic is now consolidated in the GET /success endpoint.
-
+    // USED BY PAYPAL AS RETURN URL
     @GetMapping("/payment-callback")
     public ResponseEntity<?> handlePaymentCallback(
             @RequestParam String token,
@@ -191,66 +181,67 @@ public class BookingController {
         try {
             if (bookingId == null || bookingId.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "status", "error",
-                    "message", "Booking ID is required"
+                        "status", "error",
+                        "message", "Booking ID is required"
                 ));
             }
-            
+
             Long extractedBookingId = Long.valueOf(bookingId);
             Booking booking = bookingService.getBookingById(extractedBookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "status", "error",
-                    "message", "Booking not found"
+                        "status", "error",
+                        "message", "Booking not found"
                 ));
             }
-            
-            // If booking is already confirmed, just return success with booking details
+
+            // If booking is already confirmed, return success with booking details
             if ("confirmed".equals(booking.getStatus())) {
                 return ResponseEntity.ok(Map.of(
-                    "status", "success",
-                    "booking", booking,
-                    "message", "Payment already completed successfully"
+                        "status", "success",
+                        "booking", booking,
+                        "message", "Payment already completed successfully"
                 ));
             }
-            
+
             // If booking is still pending, process the payment
             if ("pending".equals(booking.getStatus())) {
                 booking = bookingService.handlePaymentCallback(token, PayerID, bookingId);
                 return ResponseEntity.ok(Map.of(
-                    "status", "success",
-                    "booking", booking,
-                    "message", "Payment completed successfully"
+                        "status", "success",
+                        "booking", booking,
+                        "message", "Payment completed successfully"
                 ));
             }
-            
+
             // If booking is in any other state, return error
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", "Booking is in invalid state: " + booking.getStatus()
+                    "status", "error",
+                    "message", "Booking is in invalid state: " + booking.getStatus()
             ));
-            
+
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", "Invalid booking ID format"
+                    "status", "error",
+                    "message", "Invalid booking ID format"
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", e.getMessage()
+                    "status", "error",
+                    "message", e.getMessage()
             ));
         }
     }
 
+    // USED BY FRONEND IN booking/cancel
     @GetMapping("/payment-cancel")
     public void handlePaymentCancel(
             @RequestParam(required = false) String bookingId,
             HttpServletResponse response) throws IOException {
         // Redirect to frontend cancel page
-        String redirectUrl = "http://localhost:3000/en/booking/cancel?bookingId=" + 
-                            (bookingId != null ? bookingId : "");
+        String redirectUrl = "http://localhost:3000/en/booking/cancel?bookingId=" +
+                (bookingId != null ? bookingId : "");
         response.sendRedirect(redirectUrl);
     }
 
@@ -286,6 +277,7 @@ public class BookingController {
         }
     }
 
+    // NOT USED
     @GetMapping("/success")
     public void handlePaymentSuccess(
             @RequestParam String token,
@@ -300,7 +292,7 @@ public class BookingController {
 
             // --- SINGLE SOURCE OF TRUTH LOGIC ---
             // 1. Capture payment with PayPal
-            payPalPaymentService.capturePayment(longBookingId, token, PayerID);
+            payPalPaymentService.capturePayment(token);
 
             // 2. Confirm booking in local DB
             bookingService.confirmPayment(longBookingId, token, PayerID);
@@ -325,39 +317,39 @@ public class BookingController {
             System.out.println("=== DEBUG: Checking booking ID: " + bookingId + " ===");
             Booking booking = bookingService.getBookingById(bookingId);
             System.out.println("=== DEBUG: Booking found: " + (booking != null) + " ===");
-            
+
             if (booking == null) {
                 return ResponseEntity.ok(Map.of(
-                    "bookingId", bookingId,
-                    "exists", false,
-                    "message", "Booking not found"
+                        "bookingId", bookingId,
+                        "exists", false,
+                        "message", "Booking not found"
                 ));
             }
-            
+
             System.out.println("=== DEBUG: Booking status: " + booking.getStatus() + " ===");
-            
+
             return ResponseEntity.ok(Map.of(
-                "bookingId", booking.getBookingId(),
-                "exists", true,
-                "status", booking.getStatus(),
-                "userId", booking.getUser().getId(),
-                "fieldId", booking.getField().getFieldId(),
-                "fromTime", booking.getFromTime().toString(),
-                "toTime", booking.getToTime().toString(),
-                "paymentToken", booking.getPaymentToken(),
-                "message", "Booking found successfully"
+                    "bookingId", booking.getBookingId(),
+                    "exists", true,
+                    "status", booking.getStatus(),
+                    "userId", booking.getUser().getId(),
+                    "fieldId", booking.getField().getFieldId(),
+                    "fromTime", booking.getFromTime().toString(),
+                    "toTime", booking.getToTime().toString(),
+                    "paymentToken", booking.getPaymentToken(),
+                    "message", "Booking found successfully"
             ));
         } catch (Exception e) {
             System.err.println("=== DEBUG ERROR: " + e.getMessage() + " ===");
             e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to fetch booking: " + e.getMessage(),
-                "bookingId", bookingId,
-                "stackTrace", e.getClass().getSimpleName()
+                    "error", "Failed to fetch booking: " + e.getMessage(),
+                    "bookingId", bookingId,
+                    "stackTrace", e.getClass().getSimpleName()
             ));
         }
     }
-    
+
     // Authenticated endpoint to get booking details for receipt page
     @GetMapping("/details/{bookingId}")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
@@ -365,58 +357,58 @@ public class BookingController {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
-            
+
             Booking booking = bookingService.getBookingById(bookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking not found",
-                    "bookingId", bookingId
+                        "error", "Booking not found",
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Check if the authenticated user owns this booking
             if (!booking.getUser().getId().equals(userId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You can only view your own booking details"));
+                        .body(Map.of("error", "You can only view your own booking details"));
             }
-            
+
             return ResponseEntity.ok(Map.of(
-                "booking", booking,
-                "message", "Booking details retrieved successfully"
+                    "booking", booking,
+                    "message", "Booking details retrieved successfully"
             ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to fetch booking details: " + e.getMessage(),
-                "bookingId", bookingId
+                    "error", "Failed to fetch booking details: " + e.getMessage(),
+                    "bookingId", bookingId
             ));
         }
     }
 
- 
+
     @GetMapping("/receipt/{bookingId}")
     public ResponseEntity<?> getBookingReceipt(@PathVariable Long bookingId) {
         try {
             Booking booking = bookingService.getBookingById(bookingId);
-            
+
             if (booking == null) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking not found",
-                    "bookingId", bookingId
+                        "error", "Booking not found",
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Only allow access to confirmed bookings for security
             if (!"confirmed".equals(booking.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Booking is not confirmed",
-                    "status", booking.getStatus(),
-                    "bookingId", bookingId
+                        "error", "Booking is not confirmed",
+                        "status", booking.getStatus(),
+                        "bookingId", bookingId
                 ));
             }
-            
+
             // Convert to DTO to avoid Hibernate proxy serialization issues
-            BookingReceiptDTO receiptDTO = bookingMapper.mapToReceiptDTO(booking);
+            BookingReceiptDTO receiptDTO = BookingMapper.mapToReceiptDTO(booking);
             return ResponseEntity.ok(Map.of(
                 "booking", receiptDTO,
                 "message", "Booking receipt retrieved successfully"
@@ -429,6 +421,7 @@ public class BookingController {
         }
     }
 
+    // MAIN ONE: RETURN URL AND FRONTEND: booking/success
     // New PayPal callback endpoint - single source of truth for payment processing
     @GetMapping("/paypal/callback")
     public void handlePayPalCallback(
@@ -441,7 +434,7 @@ public class BookingController {
 
             // --- SINGLE SOURCE OF TRUTH LOGIC ---
             // 1. Capture payment with PayPal
-            payPalPaymentService.capturePayment(longBookingId, token, payerId);
+            payPalPaymentService.capturePayment(token);
 
             // 2. Confirm booking in local DB
             bookingService.confirmPayment(longBookingId, token, payerId);
@@ -523,7 +516,7 @@ public class BookingController {
                 if (!hasValidScores) {
                     throw new RuntimeException("AI service returned invalid or mock scores");
                 }
-                
+
                 // --- FILTER OUT LOW COMPATIBILITY SCORES ---
                 List<Map<String, Object>> filteredRecommendations = recommendations.stream()
                     .filter(rec -> {
@@ -534,12 +527,12 @@ public class BookingController {
                         return false; // Exclude recommendations without valid compatibility scores
                     })
                     .collect(Collectors.toList());
-                
+
                 recommendations = filteredRecommendations;
-                logger.info("Filtered recommendations: {} out of {} teammates meet minimum compatibility threshold of {}", 
+                logger.info("Filtered recommendations: {} out of {} teammates meet minimum compatibility threshold of {}",
                            recommendations.size(), potentialTeammates.size(), MINIMUM_COMPATIBILITY_THRESHOLD);
                 // --- END OF FILTERING LOGIC ---
-                
+
             } catch (Exception e) {
                 logger.error("AI service failed, returning error instead of mock data: {}", e.getMessage());
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
@@ -575,7 +568,7 @@ public class BookingController {
             "timestamp", System.currentTimeMillis()
         ));
     }
-    
+
     // Convert draft match to real booking
     @PostMapping("/from-draft/{draftMatchId}")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
@@ -586,9 +579,9 @@ public class BookingController {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
-            
+
             Map<String, Object> result = bookingService.convertDraftMatchToBooking(draftMatchId, bookingId, userId);
-            
+
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Draft match converted to booking successfully",
