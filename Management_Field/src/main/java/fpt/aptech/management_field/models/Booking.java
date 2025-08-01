@@ -36,7 +36,7 @@ public class Booking {
     
     private Integer slots;
     
-    @Column(name = "status", columnDefinition = "varchar(255) check (status in ('confirmed', 'pending', 'cancelled'))")
+    @Column(name = "status", columnDefinition = "nvarchar(max) check (status in ('confirmed', 'pending', 'cancelled'))")
     private String status;
     
     @ManyToOne(fetch = FetchType.EAGER)
@@ -56,4 +56,77 @@ public class Booking {
     @OneToMany(mappedBy = "booking", fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "booking"})
     private List<BookingUser> bookingUsers;
+    
+    // Explicit getters and setters for compatibility
+    public Long getBookingId() {
+        return bookingId;
+    }
+    
+    public void setBookingId(Long bookingId) {
+        this.bookingId = bookingId;
+    }
+    
+    public User getUser() {
+        return user;
+    }
+    
+    public void setUser(User user) {
+        this.user = user;
+    }
+    
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    
+    public Instant getFromTime() {
+        return fromTime;
+    }
+    
+    public void setFromTime(Instant fromTime) {
+        this.fromTime = fromTime;
+    }
+    
+    public Instant getToTime() {
+        return toTime;
+    }
+    
+    public void setToTime(Instant toTime) {
+        this.toTime = toTime;
+    }
+    
+    public String getPaymentToken() {
+        return paymentToken;
+    }
+    
+    public void setPaymentToken(String paymentToken) {
+        this.paymentToken = paymentToken;
+    }
+    
+    public Field getField() {
+        return field;
+    }
+    
+    public void setField(Field field) {
+        this.field = field;
+    }
+    
+    public Integer getSlots() {
+        return slots;
+    }
+    
+    public void setSlots(Integer slots) {
+        this.slots = slots;
+    }
+    
+    public List<BookingUser> getBookingUsers() {
+        return bookingUsers;
+    }
+    
+    public void setBookingUsers(List<BookingUser> bookingUsers) {
+        this.bookingUsers = bookingUsers;
+    }
 }

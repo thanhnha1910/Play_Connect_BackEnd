@@ -18,8 +18,10 @@ public class Team {
     @Column(name = "team_id")
     private Long teamId;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String name;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String code;
     
     @Column(name = "created_at")

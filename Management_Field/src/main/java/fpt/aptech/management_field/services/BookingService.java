@@ -4,14 +4,17 @@ import fpt.aptech.management_field.events.BookingConfirmedEvent;
 import fpt.aptech.management_field.mappers.BookingMapper;
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.BookingUser;
+import fpt.aptech.management_field.models.DraftMatch;
 import fpt.aptech.management_field.models.Field;
 import fpt.aptech.management_field.models.FieldClosure;
+import fpt.aptech.management_field.models.Notification;
 import fpt.aptech.management_field.models.User;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
 import fpt.aptech.management_field.payload.dtos.BookingHistoryDto;
 import fpt.aptech.management_field.payload.request.BookingRequest;
 import fpt.aptech.management_field.repositories.BookingRepository;
 import fpt.aptech.management_field.repositories.BookingUserRepository;
+import fpt.aptech.management_field.repositories.DraftMatchRepository;
 import fpt.aptech.management_field.repositories.FieldRepository;
 import fpt.aptech.management_field.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,11 +38,16 @@ public class BookingService {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
+    
+    @Autowired
+    private BookingMapper bookingMapper;
+     @Autowired
+     private UserService userService;
 
     public List<BookingDTO> getBookingsByDate(Instant startDate, Instant endDate, Long fieldId) {
         try {
             List<Booking> bookings = bookingRepository.findForFieldByDate(startDate, endDate, fieldId);
-            return BookingMapper.listToDTO(bookings);
+            return bookingMapper.listToDTO(bookings);
         } catch (Exception e) {
             System.out.println("Error fetching bookings: " + e.getMessage());
             // Return empty list as fallback to prevent API failure
@@ -59,6 +67,12 @@ public class BookingService {
 
     @Autowired
     private PayPalPaymentService payPalPaymentService;
+    
+    @Autowired
+    private DraftMatchRepository draftMatchRepository;
+    
+    @Autowired
+    private NotificationService notificationService;
     @Transactional
     public Map<String, Object> createBooking(Long userId, BookingRequest bookingRequest) {
         User user = userRepository.findById(userId)
@@ -127,8 +141,18 @@ public class BookingService {
             }
         }
 
-        float totalPrice = field.getHourlyRate() * Duration.between(bookingRequest.getFromTime(), bookingRequest.getToTime()).toHours();
-        String payUrl = payPalPaymentService.initiatePayPalPayment(booking.getBookingId(), totalPrice);
+        // float totalPrice = field.getHourlyRate() * Duration.between(bookingRequest.getFromTime(), bookingRequest.getToTime()).toHours();
+        // String payUrl = payPalPaymentService.initiatePayPalPayment(booking.getBookingId(), totalPrice);
+
+long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getToTime()).toHours();
+        float basePrice = field.getHourlyRate() * hours;
+        // Thêm null check cho memberLevel
+        Integer memberLevel = user.getMemberLevel();
+        int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
+        float discountAmount = basePrice * discountPercent / 100;
+        float finalPrice = basePrice - discountAmount;
+        String payUrl = payPalPaymentService.initiatePayPalPayment(booking.getBookingId(), finalPrice);
+
 
         Map<String, Object> response = new HashMap<>();
         response.put("bookingId", booking.getBookingId());
@@ -180,9 +204,19 @@ public class BookingService {
         dto.setStartTime(booking.getFromTime());
         dto.setEndTime(booking.getToTime());
         
-        // Calculate total price - fix type conversion
+        // Calculate total price with discount - fix type conversion and add discount calculation
         long hours = java.time.Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
-        dto.setTotalPrice((double) (booking.getField().getHourlyRate() * hours));
+        double basePrice = booking.getField().getHourlyRate() * hours;
+        
+        // Apply discount if user has memberLevel
+        if (booking.getUser() != null) {
+            Integer memberLevel = booking.getUser().getMemberLevel();
+            int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
+            double discountAmount = basePrice * discountPercent / 100;
+            dto.setTotalPrice(basePrice - discountAmount);
+        } else {
+            dto.setTotalPrice(basePrice);
+        }
         
         dto.setStatus(booking.getStatus());
         return dto;
@@ -232,12 +266,26 @@ public class BookingService {
             if (!"pending".equals(booking.getStatus())) {
                 throw new RuntimeException("Booking is not in pending state");
             }
-            
+            User user = booking.getUser();
+            int updatedBookingCount = user.getBookingCount() + 1;
+            user.setBookingCount(updatedBookingCount);
+
+            int newLevel = userService.calculateLevel(updatedBookingCount);
+            user.setMemberLevel(newLevel);
+
             booking.setPaymentToken(token);
             booking.setStatus("confirmed");
-            
+             userRepository.save(user);
+
             Booking savedBooking = bookingRepository.save(booking);
             
+            long hours = Duration.between(booking.getFromTime(), booking.getToTime()).toHours();
+            int basePrice = booking.getField().getHourlyRate() * (int) hours;
+            // Thêm null check cho memberLevel
+            Integer memberLevel = user.getMemberLevel();
+            int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
+            int discountAmount = basePrice * discountPercent / 100;
+            int totalPrice = basePrice - discountAmount;
             // Publish booking confirmed event
             eventPublisher.publishEvent(new BookingConfirmedEvent(this, savedBooking));
             
@@ -247,8 +295,66 @@ public class BookingService {
             throw new RuntimeException("Payment callback processing failed: " + e.getMessage());
         }
     }
-
-
-
+    
+    @Transactional
+    public Map<String, Object> convertDraftMatchToBooking(Long draftMatchId, Long bookingId, Long userId) {
+        // Find the draft match
+        DraftMatch draftMatch = draftMatchRepository.findById(draftMatchId)
+                .orElseThrow(() -> new RuntimeException("Draft match not found"));
+        
+        // Verify the user is the creator
+        if (!draftMatch.getCreator().getId().equals(userId)) {
+            throw new RuntimeException("Only the creator can convert this draft match");
+        }
+        
+        // Verify the draft match is in AWAITING_CONFIRMATION status
+        if (!"AWAITING_CONFIRMATION".equals(draftMatch.getStatus())) {
+            throw new RuntimeException("Draft match is not in awaiting confirmation status");
+        }
+        
+        // Find the booking
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        
+        // Verify the booking belongs to the same user
+        if (!booking.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Booking does not belong to the user");
+        }
+        
+        // Update draft match status to CONVERTED_TO_MATCH
+        draftMatch.setStatus("CONVERTED_TO_MATCH");
+        draftMatch = draftMatchRepository.save(draftMatch);
+        
+        // Send notifications to all interested users
+        for (User interestedUser : draftMatch.getInterestedUsers()) {
+            createNotificationForDraftMatchConfirmed(draftMatch, booking, interestedUser);
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("draftMatchId", draftMatchId);
+        result.put("bookingId", bookingId);
+        result.put("status", draftMatch.getStatus());
+        result.put("notificationsSent", draftMatch.getInterestedUsers().size());
+        
+        return result;
+    }
+    
+    private void createNotificationForDraftMatchConfirmed(DraftMatch draftMatch, Booking booking, User recipient) {
+        Notification notification = new Notification();
+        notification.setRecipient(recipient);
+        notification.setTitle("Kèo đã được chốt!");
+        notification.setContent(String.format(
+            "Kèo đã được chốt! Trận đấu '%s' sẽ diễn ra tại %s lúc %s. Vui lòng xác nhận tham gia lần cuối.",
+            draftMatch.getSportType(),
+            booking.getField().getName(),
+            booking.getFromTime().toString()
+        ));
+        notification.setType("DRAFT_MATCH_CONFIRMED");
+        notification.setRelatedEntityId(booking.getBookingId());
+        notification.setCreatedAt(LocalDateTime.now());
+        notification.setIsRead(false);
+        
+        notificationService.createNotification(notification);
+    }
 
 }

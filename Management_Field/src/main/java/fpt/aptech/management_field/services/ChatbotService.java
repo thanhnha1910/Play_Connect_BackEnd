@@ -34,7 +34,8 @@ public class ChatbotService {
     public String getResponse(String userMessage) {
         try {
             // Gọi AI Service để nhận diện intent
-            AiRequestDTO request = new AiRequestDTO(userMessage);
+            AiRequestDTO request = new AiRequestDTO();
+            request.setMessage(userMessage);
             String url = aiServiceUrl + "/predict";
             
             AiResponseDTO aiResponse = restTemplate.postForObject(url, request, AiResponseDTO.class);

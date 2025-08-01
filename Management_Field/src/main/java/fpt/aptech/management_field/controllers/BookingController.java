@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.io.IOException;
+import java.util.ArrayList;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -45,6 +46,7 @@ import java.io.IOException;
 public class BookingController {
 
     private static final Logger logger = LoggerFactory.getLogger(BookingController.class);
+    private static final double MINIMUM_COMPATIBILITY_THRESHOLD = 0.2;
 
     @Autowired
     private BookingService bookingService;
@@ -56,6 +58,9 @@ public class BookingController {
     
     @Autowired
     private PayPalPaymentService payPalPaymentService;
+    
+    @Autowired
+    private BookingMapper bookingMapper;
     
     @Autowired
     private AIRecommendationService aiRecommendationService;
@@ -411,7 +416,7 @@ public class BookingController {
             }
             
             // Convert to DTO to avoid Hibernate proxy serialization issues
-            BookingReceiptDTO receiptDTO = BookingMapper.mapToReceiptDTO(booking);
+            BookingReceiptDTO receiptDTO = bookingMapper.mapToReceiptDTO(booking);
             return ResponseEntity.ok(Map.of(
                 "booking", receiptDTO,
                 "message", "Booking receipt retrieved successfully"
@@ -500,7 +505,14 @@ public class BookingController {
             
             // Always try to use AI service for real recommendations
             try {
-                recommendations = aiRecommendationService.recommendTeammates(currentUser, potentialTeammates, sportType);
+                // Try hybrid recommendation first, fallback to legacy if needed
+                try {
+                    recommendations = aiRecommendationService.recommendTeammatesHybrid(currentUser, potentialTeammates, sportType);
+                    logger.info("Using hybrid recommendation model for booking {}", bookingId);
+                } catch (Exception hybridException) {
+                    logger.warn("Hybrid recommendation failed for booking {}, falling back to legacy: {}", bookingId, hybridException.getMessage());
+                    recommendations = aiRecommendationService.recommendTeammates(currentUser, potentialTeammates, sportType);
+                }
                 
                 // Validate that AI service returned proper scores
                 boolean hasValidScores = recommendations.stream()
@@ -511,6 +523,22 @@ public class BookingController {
                 if (!hasValidScores) {
                     throw new RuntimeException("AI service returned invalid or mock scores");
                 }
+                
+                // --- FILTER OUT LOW COMPATIBILITY SCORES ---
+                List<Map<String, Object>> filteredRecommendations = recommendations.stream()
+                    .filter(rec -> {
+                        if (rec.containsKey("compatibilityScore") && rec.get("compatibilityScore") instanceof Number) {
+                            double score = ((Number) rec.get("compatibilityScore")).doubleValue();
+                            return score >= MINIMUM_COMPATIBILITY_THRESHOLD;
+                        }
+                        return false; // Exclude recommendations without valid compatibility scores
+                    })
+                    .collect(Collectors.toList());
+                
+                recommendations = filteredRecommendations;
+                logger.info("Filtered recommendations: {} out of {} teammates meet minimum compatibility threshold of {}", 
+                           recommendations.size(), potentialTeammates.size(), MINIMUM_COMPATIBILITY_THRESHOLD);
+                // --- END OF FILTERING LOGIC ---
                 
             } catch (Exception e) {
                 logger.error("AI service failed, returning error instead of mock data: {}", e.getMessage());
@@ -546,5 +574,31 @@ public class BookingController {
             "message", "Test endpoint working",
             "timestamp", System.currentTimeMillis()
         ));
+    }
+    
+    // Convert draft match to real booking
+    @PostMapping("/from-draft/{draftMatchId}")
+    @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
+    public ResponseEntity<?> convertDraftMatchToBooking(
+            @PathVariable Long draftMatchId,
+            @RequestParam Long bookingId,
+            Authentication authentication) {
+        try {
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            Long userId = userDetails.getId();
+            
+            Map<String, Object> result = bookingService.convertDraftMatchToBooking(draftMatchId, bookingId, userId);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Draft match converted to booking successfully",
+                "data", result
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
     }
 }

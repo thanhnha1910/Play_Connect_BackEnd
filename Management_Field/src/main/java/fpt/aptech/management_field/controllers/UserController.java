@@ -276,12 +276,12 @@ public class UserController {
     }
 
     @GetMapping("/notifications")
-    public ResponseEntity<?> getUserNotifications() {
+    public ResponseEntity<?> getUserNotifications(@RequestParam(required = false) Boolean isRead) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         
         try {
-            List<Notification> notifications = notificationService.getNotificationsForUser(userDetails.getId());
+            List<Notification> notifications = notificationService.getNotificationsForUser(userDetails.getId(), isRead);
             return ResponseEntity.ok(notifications);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse("Error fetching notifications: " + e.getMessage()));

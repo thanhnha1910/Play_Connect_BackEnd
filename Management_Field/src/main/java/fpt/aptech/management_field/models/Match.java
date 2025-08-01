@@ -43,6 +43,7 @@ public class Match {
     @Column(name = "is_finished")
     private Boolean isFinished;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String type;
     
     @Column(name = "start_time")

@@ -86,6 +86,20 @@ public class UserService {
         
         return Optional.of(userRepository.saveAndFlush(user));
     }
+    public int calculateLevel(int bookingCount) {
+        if (bookingCount >= 100) return 4;
+        if (bookingCount >= 50) return 3;
+        if (bookingCount >= 20) return 2;
+        if (bookingCount >= 10) return 1;
+        return 0;
+    }
+
+    public int getDiscountPercent(Integer level) {
+        if (level == null) {
+            return 0; // Không có discount nếu level null
+        }
+        return level * 5; // mỗi cấp giảm 5%
+    }
     
     @Transactional
     public void changePassword(ChangePasswordRequest request, User currentUser) {

@@ -1,13 +1,14 @@
 package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.mappers.LocationReviewMapper;
+import java.util.ArrayList;
 import fpt.aptech.management_field.models.Field;
 import fpt.aptech.management_field.models.FieldType;
 import fpt.aptech.management_field.models.Location;
 import fpt.aptech.management_field.models.LocationReview;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
 import fpt.aptech.management_field.payload.dtos.FieldDTO;
-import fpt.aptech.management_field.payload.dtos.FieldTypeDTO;
+import fpt.aptech.management_field.payload.dtos.FieldTypeDto;
 import fpt.aptech.management_field.payload.dtos.LocationReviewDTO;
 import fpt.aptech.management_field.payload.response.FieldSummaryResponse;
 import fpt.aptech.management_field.payload.response.LocationCardResponse;
@@ -74,6 +75,28 @@ public class LocationService {
         return locations.stream().map(this::convertToLocationMapResponse).collect(Collectors.toList());
     }
 
+    private LocationMapResponse convertToLocationMapResponse(Location location) {
+        LocationMapResponse response = new LocationMapResponse();
+        response.setLocationId(location.getLocationId());
+        response.setName(location.getName());
+        response.setSlug(location.getSlug());
+        response.setAddress(location.getAddress());
+        response.setLatitude(location.getLatitude());
+        response.setLongitude(location.getLongitude());
+        
+        // Get field count
+        Integer fieldCount = locationRepository.countFieldsByLocationId(location.getLocationId());
+        response.setFieldCount(fieldCount != null ? fieldCount : 0);
+        
+        // Get average rating
+        BigDecimal averageRating = locationRepository.getAverageRatingByLocationId(location.getLocationId());
+        response.setAverageRating(averageRating);
+        
+        response.setThumbnailImageUrl(null);
+        
+        return response;
+    }
+
     public List<FieldSummaryResponse> getFieldsByLocation(Long locationId,
                                                           Long typeId,
                                                           Long categoryId,
@@ -137,35 +160,66 @@ public class LocationService {
         return locations.stream().map(this::convertToLocationCardResponse).collect(Collectors.toList());
     }
 
-    private LocationMapResponse convertToLocationMapResponse(Location location) {
-        LocationMapResponse response = new LocationMapResponse();
-        response.setLocationId(location.getLocationId());
-        response.setName(location.getName());
-        response.setAddress(location.getAddress());
-        response.setLatitude(location.getLatitude());
-        response.setLongitude(location.getLongitude());
-
-        // Get field count
-        Integer fieldCount = locationRepository.countFieldsByLocationId(location.getLocationId());
-        response.setFieldCount(fieldCount != null ? fieldCount : 0); // Xử lý trường hợp count trả về null
-
-        // Get average rating (may be null if no reviews)
-        BigDecimal averageRating = locationRepository.getAverageRatingByLocationId(location.getLocationId());
-        response.setAverageRating(averageRating);
-
-        // Set thumbnail (you can implement logic to get the first field's image or location image)
-        response.setThumbnailImageUrl(null); // TODO: Implement as needed
-        // Ví dụ:
-        // if (location.getFields() != null && !location.getFields().isEmpty()) {
-        //    // Lấy ảnh từ field đầu tiên hoặc một logic nào đó
-        //    response.setThumbnailImageUrl(location.getFields().get(0).getSomeImageUrlField());
-        // } else if (location.getLocationImageUrl() != null) {
-        //    response.setThumbnailImageUrl(location.getLocationImageUrl());
-        // }
-
-
-        return response;
+    public List<LocationMapResponse> getAllLocationsForMap() {
+        // Step 1: Fetch all location entities from the database.
+        List<Location> locations = locationRepository.findAll();
+        System.out.println("Found " + locations.size() + " locations in the database to process for map.");
+        
+        if (locations.isEmpty()) {
+            System.out.println("WARNING: No locations found in database. Check if seed data is loaded.");
+            return new ArrayList<>();
+        }
+        
+        // Step 2: Convert each Location entity to LocationMapResponse
+        List<LocationMapResponse> result = locations.stream()
+                .map(location -> {
+                    try {
+                        LocationMapResponse response = new LocationMapResponse();
+                        response.setLocationId(location.getLocationId());
+                        response.setName(location.getName());
+                        response.setSlug(location.getSlug());
+                        response.setAddress(location.getAddress());
+                        
+                        // Ensure latitude and longitude are not null before setting
+                        if (location.getLatitude() != null) {
+                            response.setLatitude(location.getLatitude());
+                        } else {
+                            System.out.println("WARNING: Location " + location.getName() + " has null latitude");
+                        }
+                        
+                        if (location.getLongitude() != null) {
+                            response.setLongitude(location.getLongitude());
+                        } else {
+                            System.out.println("WARNING: Location " + location.getName() + " has null longitude");
+                        }
+                        
+                        // Get field count
+                        Integer fieldCount = locationRepository.countFieldsByLocationId(location.getLocationId());
+                        response.setFieldCount(fieldCount != null ? fieldCount : 0);
+                        
+                        // Get average rating (may be null if no reviews)
+                        BigDecimal averageRating = locationRepository.getAverageRatingByLocationId(location.getLocationId());
+                        response.setAverageRating(averageRating);
+                        
+                        // Set thumbnail (placeholder for now)
+                        response.setThumbnailImageUrl(null);
+                        
+                        System.out.println("Processed location: " + location.getName() + " (ID: " + location.getLocationId() + ")");
+                        return response;
+                    } catch (Exception e) {
+                        System.out.println("ERROR processing location " + location.getLocationId() + ": " + e.getMessage());
+                        e.printStackTrace();
+                        return null;
+                    }
+                })
+                .filter(response -> response != null) // Filter out any null responses from errors
+                .collect(Collectors.toList());
+        
+        System.out.println("Successfully processed " + result.size() + " locations for map data.");
+        return result;
     }
+
+
 
     private FieldSummaryResponse convertToFieldSummaryResponse(Field field) {
         FieldSummaryResponse response = new FieldSummaryResponse();
@@ -189,6 +243,7 @@ public class LocationService {
         LocationCardResponse response = new LocationCardResponse();
         response.setLocationId(location.getLocationId());
         response.setLocationName(location.getName());
+        response.setSlug(location.getSlug());
         response.setAddress(location.getAddress());
 
         // Temporarily set default values to avoid complex queries
@@ -248,7 +303,7 @@ public class LocationService {
                     .collect(Collectors.groupingBy(Field::getType));
             System.out.println("Grouped fields by " + groupedByType.size() + " types");
             
-            List<FieldTypeDTO> typeDTOS = groupedByType.entrySet().stream()
+            List<FieldTypeDto> typeDTOS = groupedByType.entrySet().stream()
                     .map(entry -> {
                         FieldType type = entry.getKey();
                         List<FieldDTO> fieldDTOs = entry.getValue().stream()
@@ -282,7 +337,7 @@ public class LocationService {
                                 })
                                 .collect(Collectors.toList());
 
-                        return new FieldTypeDTO(
+                        return new FieldTypeDto(
                                 type.getName(),
                                 type.getTeamCapacity(),
                                 type.getMaxCapacity(),

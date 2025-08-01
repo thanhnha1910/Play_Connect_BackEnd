@@ -188,9 +188,13 @@ public class FieldService {
             throw new AccessDeniedException("You don't have permission to create fields in this location");
         }
         
-        // Verify field type exists
+        // Verify field type exists and belongs to the location
         FieldType fieldType = fieldTypeRepository.findById(request.getTypeId())
             .orElseThrow(() -> new RuntimeException("Field type not found with id: " + request.getTypeId()));
+        
+        if (!fieldType.getLocation().getLocationId().equals(request.getLocationId())) {
+            throw new RuntimeException("Field type does not belong to the specified location");
+        }
         
         // Create new field
         Field field = new Field();
@@ -200,6 +204,8 @@ public class FieldService {
         field.setLocation(location);
         field.setIsActive(request.getIsActive());
         field.setHourlyRate(request.getHourlyRate());
+        field.setThumbnailUrl(request.getThumbnailUrl());
+        field.setImageGallery(request.getImageGallery());
         
         Field savedField = fieldRepository.save(field);
         return convertToFieldDetailDto(savedField);
@@ -226,9 +232,13 @@ public class FieldService {
             field.setLocation(newLocation);
         }
         
-        // Verify field type exists
+        // Verify field type exists and belongs to the location
         FieldType fieldType = fieldTypeRepository.findById(request.getTypeId())
             .orElseThrow(() -> new RuntimeException("Field type not found with id: " + request.getTypeId()));
+        
+        if (!fieldType.getLocation().getLocationId().equals(request.getLocationId())) {
+            throw new RuntimeException("Field type does not belong to the specified location");
+        }
         
         // Update field properties
         field.setName(request.getName());
@@ -236,6 +246,8 @@ public class FieldService {
         field.setType(fieldType);
         field.setIsActive(request.getIsActive());
         field.setHourlyRate(request.getHourlyRate());
+        field.setThumbnailUrl(request.getThumbnailUrl());
+        field.setImageGallery(request.getImageGallery());
         
         Field updatedField = fieldRepository.save(field);
         return convertToFieldDetailDto(updatedField);
@@ -257,6 +269,21 @@ public class FieldService {
         List<Location> locations = locationRepository.findByOwner_User_Id(currentUser.getId());
         return locations.stream()
             .map(this::convertToLocationDto)
+            .collect(Collectors.toList());
+    }
+    
+    public List<FieldSummaryDto> getFieldsByLocation(Long locationId, User currentUser) {
+        // Verify location ownership
+        Location location = locationRepository.findById(locationId)
+            .orElseThrow(() -> new RuntimeException("Location not found with id: " + locationId));
+        
+        if (!location.getOwner().getUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You don't have permission to access fields for this location");
+        }
+        
+        List<Field> fields = fieldRepository.findByLocation_LocationId(locationId);
+        return fields.stream()
+            .map(this::convertToFieldSummaryDto)
             .collect(Collectors.toList());
     }
     
@@ -284,6 +311,8 @@ public class FieldService {
         dto.setHourlyRate(field.getHourlyRate());
         dto.setTypeId(field.getType().getTypeId());
         dto.setLocationId(field.getLocation().getLocationId());
+        dto.setThumbnailUrl(field.getThumbnailUrl());
+        dto.setImageGallery(field.getImageGallery());
         return dto;
     }
     

@@ -50,6 +50,22 @@ public class LocationController {
         }
     }
 
+    @GetMapping("/map-data")
+    @Operation(summary = "Get all locations for map", description = "Get a list of all locations with coordinates for displaying on the map")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved map data"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<List<LocationMapResponse>> getMapData() {
+        try {
+            List<LocationMapResponse> locations = locationService.getAllLocationsForMap();
+            return ResponseEntity.ok(locations);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
     @GetMapping("/map-search")
     @Operation(summary = "Search locations on map", description = "Get a list of locations in a geographic area to display markers on the map")
     @ApiResponses(value = {

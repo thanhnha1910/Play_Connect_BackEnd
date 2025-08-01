@@ -3,9 +3,11 @@ package fpt.aptech.management_field.models;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
 @Table(name = "sports")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Sport {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -13,16 +15,16 @@ public class Sport {
     
     @NotBlank
     @Size(max = 100)
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, columnDefinition = "NVARCHAR(MAX)")
     private String name;
     
     @NotBlank
     @Size(max = 50)
-    @Column(name = "sport_code", nullable = false, unique = true)
+    @Column(name = "sport_code", nullable = false, unique = true, columnDefinition = "NVARCHAR(MAX)")
     private String sportCode;
     
     @Size(max = 10)
-    @Column(name = "icon")
+    @Column(name = "icon", columnDefinition = "NVARCHAR(MAX)")
     private String icon;
     
     @Column(name = "is_active", nullable = false)

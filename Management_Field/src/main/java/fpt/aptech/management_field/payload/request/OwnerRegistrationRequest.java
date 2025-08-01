@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-@Data
 public class OwnerRegistrationRequest {
     @NotBlank(message = "Username is required")
     @Size(min = 3, max = 20, message = "Username must be between 3 and 20 characters")
@@ -34,4 +33,22 @@ public class OwnerRegistrationRequest {
     @NotBlank(message = "Business name is required")
     @Size(min = 2, max = 100, message = "Business name must be between 2 and 100 characters")
     private String businessName;
+    
+    // Getters
+    public String getUsername() { return username; }
+    public String getEmail() { return email; }
+    public String getPassword() { return password; }
+    public String getFullName() { return fullName; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public String getAddress() { return address; }
+    public String getBusinessName() { return businessName; }
+    
+    // Setters
+    public void setUsername(String username) { this.username = username; }
+    public void setEmail(String email) { this.email = email; }
+    public void setPassword(String password) { this.password = password; }
+    public void setFullName(String fullName) { this.fullName = fullName; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    public void setAddress(String address) { this.address = address; }
+    public void setBusinessName(String businessName) { this.businessName = businessName; }
 }

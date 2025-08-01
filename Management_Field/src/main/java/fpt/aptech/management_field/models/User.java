@@ -28,18 +28,19 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
     
-    @Column(name = "full_name")
+    @Column(name = "full_name", columnDefinition = "NVARCHAR(MAX)")
     private String fullName;
     
     @Column(name = "phone_number")
     private String phoneNumber;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String address;
     
-    @Column(name = "profile_picture")
+    @Column(name = "profile_picture", columnDefinition = "NVARCHAR(MAX)")
     private String profilePicture;
     
-    @Column(name = "image_url")
+    @Column(name = "image_url", columnDefinition = "NVARCHAR(MAX)")
     private String imageUrl;
     
     @Enumerated(EnumType.STRING)
@@ -74,7 +75,7 @@ public class User {
     @Column(name = "join_date")
     private LocalDateTime joinDate;
     
-    @Column(name = "sport_profiles", columnDefinition = "TEXT")
+    @Column(name = "sport_profiles", columnDefinition = "NVARCHAR(MAX)")
     private String sportProfiles; // JSON string storing sport-specific profiles
     
     @Column(name = "is_discoverable", nullable = false, columnDefinition = "bit default 1")
@@ -82,6 +83,12 @@ public class User {
     
     @Column(name = "has_completed_profile", nullable = false, columnDefinition = "bit default 0")
     private boolean hasCompletedProfile = false; // Default to false for new users
+    
+    @Column(name = "booking_count")
+    private Integer bookingCount = 0;
+
+    @Column(name = "member_level")
+    private Integer memberLevel = 1;
     
     public Long getId() {
         return id;
@@ -246,7 +253,11 @@ public class User {
     public Boolean getDiscoverable() {
         return isDiscoverable;
     }
-
+    
+    public Boolean getIsDiscoverable() {
+        return isDiscoverable;
+    }
+    
     public void setDiscoverable(Boolean discoverable) {
         isDiscoverable = discoverable;
     }
@@ -265,6 +276,22 @@ public class User {
 
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
+    }
+    
+    public Integer getBookingCount() {
+        return bookingCount;
+    }
+    
+    public void setBookingCount(Integer bookingCount) {
+        this.bookingCount = bookingCount;
+    }
+    
+    public Integer getMemberLevel() {
+        return memberLevel;
+    }
+    
+    public void setMemberLevel(Integer memberLevel) {
+        this.memberLevel = memberLevel;
     }
 
     @PrePersist

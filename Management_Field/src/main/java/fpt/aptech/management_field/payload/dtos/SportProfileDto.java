@@ -14,6 +14,11 @@ public class SportProfileDto {
     private String sport; // e.g., "BONG_DA", "CAU_LONG"
     private Integer skill; // 1-5 skill level
     private List<String> tags; // e.g., ["tiền đạo", "sút tốt"]
+    
+    // Explicit getter for compatibility
+    public List<String> getTags() {
+        return tags;
+    }
 }
 
 @Data

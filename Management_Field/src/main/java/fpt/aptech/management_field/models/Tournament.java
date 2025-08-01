@@ -16,6 +16,7 @@ public class Tournament {
     @Column(name = "tournament_id")
     private Long tournamentId;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String name;
     
     private Integer prize;

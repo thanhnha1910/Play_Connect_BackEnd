@@ -16,10 +16,35 @@ public class Owner {
     @Column(name = "owner_id")
     private Long ownerId;
     
-    @Column(name = "business_name")
+    @Column(name = "business_name", columnDefinition = "NVARCHAR(MAX)")
     private String businessName;
     
     @OneToOne
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
+    
+    // Explicit getters and setters for compatibility
+    public Long getOwnerId() {
+        return ownerId;
+    }
+    
+    public void setOwnerId(Long ownerId) {
+        this.ownerId = ownerId;
+    }
+    
+    public String getBusinessName() {
+        return businessName;
+    }
+    
+    public void setBusinessName(String businessName) {
+        this.businessName = businessName;
+    }
+    
+    public User getUser() {
+        return user;
+    }
+    
+    public void setUser(User user) {
+        this.user = user;
+    }
 }

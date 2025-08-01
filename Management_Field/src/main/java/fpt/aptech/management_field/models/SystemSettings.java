@@ -15,15 +15,15 @@ public class SystemSettings {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(name = "setting_key", unique = true, nullable = false)
+    @Column(name = "setting_key", unique = true, nullable = false, columnDefinition = "NVARCHAR(MAX)")
     private String key;
     
-    @Column(name = "setting_value", columnDefinition = "TEXT")
+    @Column(name = "setting_value", columnDefinition = "NVARCHAR(MAX)")
     private String value;
     
-    @Column(name = "setting_type")
+    @Column(name = "setting_type", columnDefinition = "NVARCHAR(MAX)")
     private String type; // BOOLEAN, STRING, INTEGER, DOUBLE
     
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "NVARCHAR(MAX)")
     private String description;
 }

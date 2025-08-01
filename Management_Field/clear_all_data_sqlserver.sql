@@ -1,64 +1,78 @@
--- SQL Server Script to Truncate All Transactional and Master Data
--- Run this before inserting new sample data to ensure a clean state.
-
--- Use the target database
-USE Project4;
+USE Project4_VN;
 GO
 
--- Disable foreign key constraints on all tables to avoid order issues
--- Comment out sp_msforeachtable as it may cause issues
--- EXEC sp_msforeachtable "ALTER TABLE ? NOCHECK CONSTRAINT all";
+PRINT '--- Starting cleanup of all related tables in correct dependency order ---';
 
-PRINT 'Deleting all data from tables...';
+-- Level 1: Tables with the most dependencies (many-to-many, join tables, etc.)
+DELETE FROM dbo.open_match_participants;
+DELETE FROM dbo.invitations;
+DELETE FROM dbo.team_rosters;
+DELETE FROM dbo.matches;
+DELETE FROM dbo.participating_teams;
+DELETE FROM dbo.field_reviews;
+DELETE FROM dbo.location_reviews;
+DELETE FROM dbo.notifications;
+DELETE FROM dbo.booking_users;
+DELETE FROM dbo.payments;
+DELETE FROM dbo.user_roles;
 
--- Delete data in reverse dependency order to avoid foreign key issues
--- Using DELETE instead of TRUNCATE to handle foreign key constraints
+-- Level 2: Tables that Level 1 depends on
+DELETE FROM dbo.open_matches;
+DELETE FROM dbo.bookings;
+DELETE FROM dbo.field_closure;
+DELETE FROM dbo.holiday_closure;
+DELETE FROM dbo.global_closure;
+DELETE FROM dbo.operating_hours;
+DELETE FROM dbo.refresh_tokens;
 
--- Transactional data (delete first)
-IF OBJECT_ID('dbo.payments', 'U') IS NOT NULL DELETE FROM dbo.payments;
-IF OBJECT_ID('dbo.booking_users', 'U') IS NOT NULL DELETE FROM dbo.booking_users;
-IF OBJECT_ID('dbo.field_reviews', 'U') IS NOT NULL DELETE FROM dbo.field_reviews;
-IF OBJECT_ID('dbo.location_reviews', 'U') IS NOT NULL DELETE FROM dbo.location_reviews;
-IF OBJECT_ID('dbo.notifications', 'U') IS NOT NULL DELETE FROM dbo.notifications;
-IF OBJECT_ID('dbo.matches', 'U') IS NOT NULL DELETE FROM dbo.matches;
-IF OBJECT_ID('dbo.participating_teams', 'U') IS NOT NULL DELETE FROM dbo.participating_teams;
-IF OBJECT_ID('dbo.team_rosters', 'U') IS NOT NULL DELETE FROM dbo.team_rosters;
-IF OBJECT_ID('dbo.friends', 'U') IS NOT NULL DELETE FROM dbo.friends;
+-- Level 3: Core entities that Level 2 depends on
+DELETE FROM dbo.fields;
+DELETE FROM dbo.field_categories;
+DELETE FROM dbo.field_types;
+DELETE FROM dbo.teams;
+DELETE FROM dbo.tournaments;
+DELETE FROM dbo.admins;
+DELETE FROM dbo.locations;
+DELETE FROM dbo.owners;
 
--- Closure and operating hours data
-IF OBJECT_ID('dbo.operating_hours', 'U') IS NOT NULL DELETE FROM dbo.operating_hours;
-IF OBJECT_ID('dbo.field_closure', 'U') IS NOT NULL DELETE FROM dbo.field_closure;
-IF OBJECT_ID('dbo.holiday_closure', 'U') IS NOT NULL DELETE FROM dbo.holiday_closure;
-IF OBJECT_ID('dbo.global_closure', 'U') IS NOT NULL DELETE FROM dbo.global_closure;
+-- Level 3.5: Deleting Draft Matches and all their dependencies
+DELETE FROM dbo.draft_match_user_status; -- FIX: Added this line to resolve the new foreign key conflict.
+DELETE FROM dbo.draft_match_interested_users;
+DELETE FROM dbo.draft_matches; 
 
--- Core data (child to parent order)
-IF OBJECT_ID('dbo.bookings', 'U') IS NOT NULL DELETE FROM dbo.bookings;
-IF OBJECT_ID('dbo.fields', 'U') IS NOT NULL DELETE FROM dbo.fields;
-IF OBJECT_ID('dbo.field_categories', 'U') IS NOT NULL DELETE FROM dbo.field_categories;
-IF OBJECT_ID('dbo.field_types', 'U') IS NOT NULL DELETE FROM dbo.field_types;
-IF OBJECT_ID('dbo.locations', 'U') IS NOT NULL DELETE FROM dbo.locations;
-IF OBJECT_ID('dbo.teams', 'U') IS NOT NULL DELETE FROM dbo.teams;
-IF OBJECT_ID('dbo.tournaments', 'U') IS NOT NULL DELETE FROM dbo.tournaments;
+-- Level 4: The root entities
+DELETE FROM dbo.users;
+DELETE FROM dbo.roles;
 
--- User and Auth related data
-IF OBJECT_ID('dbo.refresh_tokens', 'U') IS NOT NULL DELETE FROM dbo.refresh_tokens;
-IF OBJECT_ID('dbo.user_roles', 'U') IS NOT NULL DELETE FROM dbo.user_roles;
-IF OBJECT_ID('dbo.users', 'U') IS NOT NULL DELETE FROM dbo.users;
-IF OBJECT_ID('dbo.roles', 'U') IS NOT NULL DELETE FROM dbo.roles;
-IF OBJECT_ID('dbo.owners', 'U') IS NOT NULL DELETE FROM dbo.owners;
-IF OBJECT_ID('dbo.admins', 'U') IS NOT NULL DELETE FROM dbo.admins;
-
-PRINT 'All data has been deleted successfully.';
+PRINT '--- All data deleted successfully ---';
 GO
 
--- Reset identity values for tables that have identity columns
-IF OBJECT_ID('dbo.owners', 'U') IS NOT NULL DBCC CHECKIDENT ('dbo.owners', RESEED, 0);
-IF OBJECT_ID('dbo.locations', 'U') IS NOT NULL DBCC CHECKIDENT ('dbo.locations', RESEED, 0);
-IF OBJECT_ID('dbo.field_types', 'U') IS NOT NULL DBCC CHECKIDENT ('dbo.field_types', RESEED, 0);
-IF OBJECT_ID('dbo.field_categories', 'U') IS NOT NULL DBCC CHECKIDENT ('dbo.field_categories', RESEED, 0);
-IF OBJECT_ID('dbo.fields', 'U') IS NOT NULL DBCC CHECKIDENT ('dbo.fields', RESEED, 0);
-IF OBJECT_ID('dbo.bookings', 'U') IS NOT NULL DBCC CHECKIDENT ('dbo.bookings', RESEED, 0);
+-- Reset identity for all tables that have it
+PRINT '--- Reseeding identity columns ---';
 
-PRINT 'Identity values have been reset.';
-PRINT 'Database is now clean and ready for new data insertion.';
+DBCC CHECKIDENT ('dbo.users', RESEED, 0);
+DBCC CHECKIDENT ('dbo.roles', RESEED, 0);
+DBCC CHECKIDENT ('dbo.owners', RESEED, 0);
+DBCC CHECKIDENT ('dbo.locations', RESEED, 0);
+DBCC CHECKIDENT ('dbo.field_types', RESEED, 0);
+DBCC CHECKIDENT ('dbo.field_categories', RESEED, 0);
+DBCC CHECKIDENT ('dbo.fields', RESEED, 0);
+DBCC CHECKIDENT ('dbo.bookings', RESEED, 0);
+DBCC CHECKIDENT ('dbo.payments', RESEED, 0);
+DBCC CHECKIDENT ('dbo.notifications', RESEED, 0);
+DBCC CHECKIDENT ('dbo.open_matches', RESEED, 0);
+DBCC CHECKIDENT ('dbo.open_match_participants', RESEED, 0);
+DBCC CHECKIDENT ('dbo.invitations', RESEED, 0);
+DBCC CHECKIDENT ('dbo.teams', RESEED, 0);
+DBCC CHECKIDENT ('dbo.tournaments', RESEED, 0);
+DBCC CHECKIDENT ('dbo.matches', RESEED, 0);
+DBCC CHECKIDENT ('dbo.field_reviews', RESEED, 0);
+DBCC CHECKIDENT ('dbo.location_reviews', RESEED, 0);
+DBCC CHECKIDENT ('dbo.operating_hours', RESEED, 0);
+DBCC CHECKIDENT ('dbo.field_closure', RESEED, 0);
+DBCC CHECKIDENT ('dbo.holiday_closure', RESEED, 0);
+DBCC CHECKIDENT ('dbo.global_closure', RESEED, 0);
+DBCC CHECKIDENT ('dbo.admins', RESEED, 0);
+
+PRINT '--- Identity reseeding completed ---';
 GO

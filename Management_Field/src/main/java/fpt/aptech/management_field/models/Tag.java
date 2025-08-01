@@ -4,22 +4,26 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
-@Table(name = "tags")
+@Table(name = "tags", 
+       uniqueConstraints = @UniqueConstraint(columnNames = {"name", "sport_id"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Tag {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "NVARCHAR(MAX)")
     private String name;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sport_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Sport sport;
     
     @Column(name = "is_active", nullable = false)

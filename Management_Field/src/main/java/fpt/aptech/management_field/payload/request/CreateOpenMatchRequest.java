@@ -14,4 +14,21 @@ public class CreateOpenMatchRequest {
     private String sportType;
     private Integer slotsNeeded;
     private List<String> requiredTags;
+    
+    // Explicit getters for compatibility
+    public Long getBookingId() {
+        return bookingId;
+    }
+    
+    public String getSportType() {
+        return sportType;
+    }
+    
+    public Integer getSlotsNeeded() {
+        return slotsNeeded;
+    }
+    
+    public List<String> getRequiredTags() {
+        return requiredTags;
+    }
 }

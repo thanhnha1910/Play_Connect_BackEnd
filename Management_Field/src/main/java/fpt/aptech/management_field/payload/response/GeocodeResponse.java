@@ -14,4 +14,9 @@ public class GeocodeResponse {
     private BigDecimal longitude;
     private String formattedAddress;
     private String error;
+    
+    // Explicit setter for compatibility
+    public void setError(String error) {
+        this.error = error;
+    }
 }

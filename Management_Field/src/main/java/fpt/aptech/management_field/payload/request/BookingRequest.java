@@ -29,5 +29,71 @@ public class BookingRequest {
         private Long userId;
 
         private String position;
+        
+        // Explicit getters and setters for compatibility
+        public Long getUserId() {
+            return userId;
+        }
+        
+        public void setUserId(Long userId) {
+            this.userId = userId;
+        }
+        
+        public String getPosition() {
+            return position;
+        }
+        
+        public void setPosition(String position) {
+            this.position = position;
+        }
+    }
+    
+    // Explicit getters and setters for compatibility
+    public Long getFieldId() {
+        return fieldId;
+    }
+    
+    public void setFieldId(Long fieldId) {
+        this.fieldId = fieldId;
+    }
+    
+    public Instant getFromTime() {
+        return fromTime;
+    }
+    
+    public void setFromTime(Instant fromTime) {
+        this.fromTime = fromTime;
+    }
+    
+    public Instant getToTime() {
+        return toTime;
+    }
+    
+    public void setToTime(Instant toTime) {
+        this.toTime = toTime;
+    }
+    
+    public Integer getSlots() {
+        return slots;
+    }
+    
+    public void setSlots(Integer slots) {
+        this.slots = slots;
+    }
+    
+    public boolean isFindTeammates() {
+        return findTeammates;
+    }
+    
+    public void setFindTeammates(boolean findTeammates) {
+        this.findTeammates = findTeammates;
+    }
+    
+    public List<AdditionalPlayer> getAdditionalPlayers() {
+        return additionalPlayers;
+    }
+    
+    public void setAdditionalPlayers(List<AdditionalPlayer> additionalPlayers) {
+        this.additionalPlayers = additionalPlayers;
     }
 }

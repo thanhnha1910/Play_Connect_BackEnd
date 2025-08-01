@@ -20,6 +20,7 @@ public class LocationReview {
     
     private BigDecimal rating;
     
+    @Column(columnDefinition = "NVARCHAR(MAX)")
     private String comment;
     
     @ManyToOne
