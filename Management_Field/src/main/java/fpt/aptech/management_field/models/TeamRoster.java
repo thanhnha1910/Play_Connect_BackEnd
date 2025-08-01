@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "team_rosters")
@@ -27,6 +28,7 @@ public class TeamRoster {
     
     @ManyToOne
     @JoinColumn(name = "team_id", insertable = false, updatable = false)
+    @JsonBackReference
     private Team team;
     
     @ManyToOne

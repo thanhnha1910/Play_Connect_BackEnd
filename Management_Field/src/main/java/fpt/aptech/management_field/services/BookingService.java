@@ -2,11 +2,7 @@ package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.events.BookingConfirmedEvent;
 import fpt.aptech.management_field.mappers.BookingMapper;
-import fpt.aptech.management_field.models.Booking;
-import fpt.aptech.management_field.models.BookingUser;
-import fpt.aptech.management_field.models.Field;
-import fpt.aptech.management_field.models.FieldClosure;
-import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.models.*;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
 import fpt.aptech.management_field.payload.dtos.BookingHistoryDto;
 import fpt.aptech.management_field.payload.request.BookingRequest;
@@ -58,6 +54,9 @@ public class BookingService {
 
     @Autowired
     private PayPalPaymentService payPalPaymentService;
+
+    @Autowired
+    private PaymentService paymentService;
 
     @Transactional
     public Map<String, Object> createBooking(Long userId, BookingRequest bookingRequest) {
@@ -128,7 +127,7 @@ public class BookingService {
         }
 
         float totalPrice = field.getHourlyRate() * Duration.between(bookingRequest.getFromTime(), bookingRequest.getToTime()).toHours();
-        String payUrl = payPalPaymentService.initiatePayPalPayment(booking.getBookingId(), totalPrice);
+        String payUrl = paymentService.initiatePayPal(booking.getBookingId(), PaymentPayable.BOOKING, (int) totalPrice);
 
         Map<String, Object> response = new HashMap<>();
         response.put("bookingId", booking.getBookingId());
@@ -223,7 +222,7 @@ public class BookingService {
             }
 
             // Capture the payment through PayPal
-            payPalPaymentService.capturePayment(bookingId, token, payerId);
+            payPalPaymentService.capturePayment(token);
 
             // Update booking status
             Booking booking = bookingRepository.findById(bookingId)

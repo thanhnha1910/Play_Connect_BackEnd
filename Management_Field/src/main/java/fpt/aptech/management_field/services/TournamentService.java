@@ -2,6 +2,7 @@ package fpt.aptech.management_field.services;
 
 import fpt.aptech.management_field.models.ParticipatingTeam;
 
+import fpt.aptech.management_field.models.PaymentPayable;
 import fpt.aptech.management_field.models.Team;
 import fpt.aptech.management_field.models.Tournament;
 import fpt.aptech.management_field.payload.dtos.LocationDto;
@@ -32,13 +33,10 @@ public class TournamentService {
     private TeamRepository teamRepository;
 
     @Autowired
-    private LocationRepository locationRepository;
-
-    @Autowired
     private ParticipatingTeamRepository participatingTeamRepository;
 
     @Autowired
-    private PayPalPaymentService payPalPaymentService;
+    private PaymentService paymentService;
 
     @Autowired
     private TournamentMapper tournamentMapper;
@@ -65,17 +63,17 @@ public class TournamentService {
         }
 
         ParticipatingTeam participatingTeam = new ParticipatingTeam();
-        participatingTeam.setTeamId(team.getTeamId());
-        participatingTeam.setTournamentId(tournament.getTournamentId());
-        participatingTeam.setStatus("pending");
+        participatingTeam.setTeam(team);
+        participatingTeam.setTournament(tournament);
+        participatingTeam.setStatus("PENDING");
         participatingTeamRepository.save(participatingTeam);
 
         double entryFee = tournament.getEntryFee();
-        String payUrl = payPalPaymentService.initiatePayPalPayment(participatingTeam.getTeamId(), (float) entryFee);
+        String payUrl = paymentService.initiatePayPal(participatingTeam.getParticipatingTeamId(), PaymentPayable.TOURNAMENT, (int) entryFee);
 
         Map<String, Object> response = new HashMap<>();
         response.put("payUrl", payUrl);
-        response.put("teamId", participatingTeam.getTeamId());
+        response.put("teamId", participatingTeam.getTeam().getTeamId());
 
         return response;
     }
@@ -83,14 +81,6 @@ public class TournamentService {
     public void confirmRegistration(Long teamId, String token, String payerId) {
         ParticipatingTeam participatingTeam = participatingTeamRepository.findByTeamId(teamId)
                 .orElseThrow(() -> new RuntimeException("Participating team not found"));
-
-        if (payPalPaymentService.verifyPaymentWithPayPal(token, payerId)) {
-            participatingTeam.setStatus("confirmed");
-            participatingTeam.setPaymentToken(token);
-            participatingTeamRepository.save(participatingTeam);
-        } else {
-            throw new RuntimeException("Payment verification failed");
-        }
     }
 
     @Transactional
@@ -99,7 +89,7 @@ public class TournamentService {
         if (tournamentDto != null) {
             List<ParticipatingTeam> participatingTeams = participatingTeamRepository.findByTournamentId(tournamentDto.getTournamentId());
             tournamentDto.setParticipatingTeams(participatingTeams.stream()
-                    .map(pt -> teamRepository.findById(pt.getTeamId()).orElse(null))
+                    .map(pt -> teamRepository.findById(pt.getTeam().getTeamId()).orElse(null))
                     .filter(java.util.Objects::nonNull)
                     .map(teamMapper::toDto)
                     .collect(Collectors.toList()));
