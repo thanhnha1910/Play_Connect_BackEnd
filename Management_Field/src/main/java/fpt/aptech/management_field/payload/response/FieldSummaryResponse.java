@@ -14,6 +14,7 @@ public class FieldSummaryResponse {
     private String typeName;
     private String categoryName;
     private String thumbnailImageUrl;
+    private String imageGallery;
     
     // Explicit setters for compatibility
     public void setFieldId(Long fieldId) {
@@ -38,5 +39,9 @@ public class FieldSummaryResponse {
     
     public void setThumbnailImageUrl(String thumbnailImageUrl) {
         this.thumbnailImageUrl = thumbnailImageUrl;
+    }
+    
+    public void setImageGallery(String imageGallery) {
+        this.imageGallery = imageGallery;
     }
 }

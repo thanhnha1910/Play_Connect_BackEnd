@@ -102,6 +102,10 @@ public class OpenMatchDto {
         this.bookingDate = bookingDate;
     }
     
+    public List<String> getRequiredTags() {
+        return requiredTags;
+    }
+    
     public void setRequiredTags(List<String> requiredTags) {
         this.requiredTags = requiredTags;
     }

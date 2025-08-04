@@ -12,6 +12,7 @@ import fpt.aptech.management_field.services.PayPalPaymentService;
 import fpt.aptech.management_field.services.AIRecommendationService;
 import fpt.aptech.management_field.repositories.UserRepository;
 import org.slf4j.Logger;
+import java.util.stream.Collectors;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -408,7 +409,7 @@ public class BookingController {
             }
 
             // Convert to DTO to avoid Hibernate proxy serialization issues
-            BookingReceiptDTO receiptDTO = BookingMapper.mapToReceiptDTO(booking);
+            BookingReceiptDTO receiptDTO = bookingMapper.mapToReceiptDTO(booking);
             return ResponseEntity.ok(Map.of(
                 "booking", receiptDTO,
                 "message", "Booking receipt retrieved successfully"
@@ -421,9 +422,10 @@ public class BookingController {
         }
     }
 
-    // MAIN ONE: RETURN URL AND FRONTEND: booking/success
-    // New PayPal callback endpoint - single source of truth for payment processing
+    // DEPRECATED: This endpoint is not used by PayPal - PaymentController handles all PayPal callbacks
+    // PayPal uses PaymentController /api/payment/paypal/callback as return_url
     @GetMapping("/paypal/callback")
+    @Deprecated
     public void handlePayPalCallback(
             @RequestParam String token,
             @RequestParam("PayerID") String payerId,

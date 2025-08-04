@@ -3,6 +3,7 @@ package fpt.aptech.management_field.services;
 import fpt.aptech.management_field.events.BookingConfirmedEvent;
 import fpt.aptech.management_field.mappers.BookingMapper;
 import fpt.aptech.management_field.models.*;
+import fpt.aptech.management_field.models.PaymentPayable;
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.BookingUser;
 import fpt.aptech.management_field.models.DraftMatch;
@@ -13,6 +14,7 @@ import fpt.aptech.management_field.models.User;
 import fpt.aptech.management_field.payload.dtos.BookingDTO;
 import fpt.aptech.management_field.payload.dtos.BookingHistoryDto;
 import fpt.aptech.management_field.payload.request.BookingRequest;
+
 import fpt.aptech.management_field.repositories.BookingRepository;
 import fpt.aptech.management_field.repositories.BookingUserRepository;
 import fpt.aptech.management_field.repositories.DraftMatchRepository;
@@ -155,7 +157,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
         float discountAmount = basePrice * discountPercent / 100;
         float finalPrice = basePrice - discountAmount;
-        String payUrl = payPalPaymentService.initiatePayPalPayment(booking.getBookingId(), finalPrice);
+String payUrl = paymentService.initiatePayPal(booking.getBookingId(), PaymentPayable.BOOKING, (int) finalPrice);
 
 
         Map<String, Object> response = new HashMap<>();
@@ -171,8 +173,20 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         if (!"pending".equals(booking.getStatus())) {
             throw new RuntimeException("Booking is not in pending state");
         }
+        
+        // Update user booking count and member level
+        User user = booking.getUser();
+        int updatedBookingCount = user.getBookingCount() + 1;
+        user.setBookingCount(updatedBookingCount);
+        
+        int newLevel = userService.calculateLevel(updatedBookingCount);
+        user.setMemberLevel(newLevel);
+        
         booking.setPaymentToken(token);
         booking.setStatus("confirmed");
+        
+        // Save user first to update booking count and level
+        userRepository.save(user);
         Booking savedBooking = bookingRepository.save(booking);
 
         // Publish booking confirmed event
@@ -325,8 +339,8 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
             throw new RuntimeException("Booking does not belong to the user");
         }
 
-        // Update draft match status to CONVERTED_TO_MATCH
-        draftMatch.setStatus("CONVERTED_TO_MATCH");
+        // Update draft match status to CONVERTED
+        draftMatch.setStatus(DraftMatchStatus.CONVERTED);
         draftMatch = draftMatchRepository.save(draftMatch);
 
         // Send notifications to all interested users
@@ -360,5 +374,9 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
 
         notificationService.createNotification(notification);
     }
+    
+
+
+
 
 }

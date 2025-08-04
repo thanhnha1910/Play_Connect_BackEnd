@@ -91,8 +91,11 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/chatbot/**").permitAll()
                         .requestMatchers("/uploads/**").permitAll() // Allow public access to uploaded files
                         .requestMatchers(HttpMethod.GET, "/api/open-matches").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/open-matches").permitAll() // Allow creating open matches without auth
                         .requestMatchers(HttpMethod.GET, "/api/open-matches/booking/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/draft-matches").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/draft-matches/public").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/draft-matches").authenticated() // Require auth to create draft matches
                         .requestMatchers("/error").permitAll()
                         // WebSocket endpoints - permit handshake, authentication handled by interceptor
                         .requestMatchers("/ws/**").permitAll()

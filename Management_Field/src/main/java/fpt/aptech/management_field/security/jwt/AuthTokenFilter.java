@@ -1,5 +1,6 @@
 package fpt.aptech.management_field.security.jwt;
 
+import fpt.aptech.management_field.security.jwt.JwtUtils;
 import fpt.aptech.management_field.security.services.UserDetailsServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -43,6 +44,8 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     );
     
     private static final List<String> PUBLIC_PATHS = Arrays.asList(
+            "/api/open-matches", // Only the base endpoint is public
+            "/api/draft-matches", // Allow public access to draft matches
             "/api/booking/payment-callback",
             "/api/booking/payment-cancel",
             "/api/booking/success",

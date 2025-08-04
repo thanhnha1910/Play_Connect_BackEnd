@@ -1,7 +1,7 @@
 package fpt.aptech.management_field.controllers;
 
 import fpt.aptech.management_field.payload.dtos.DraftMatchDto;
-import fpt.aptech.management_field.payload.dtos.UserDTO;
+import fpt.aptech.management_field.payload.dtos.UserDto; // Sửa từ UserDTO thành UserDto
 import fpt.aptech.management_field.payload.request.CreateDraftMatchRequest;
 import fpt.aptech.management_field.payload.request.ConvertDraftToMatchRequest;
 import fpt.aptech.management_field.payload.request.UpdateDraftMatchRequest;
@@ -404,18 +404,45 @@ public class DraftMatchController {
     }
 
     /**
-     * Get all active draft matches, ranked by AI for the current user
+     * Get public draft matches (no authentication required)
+     * GET /api/draft-matches/public
+     */
+    @GetMapping("/public")
+    public ResponseEntity<ApiResponse<List<DraftMatchDto>>> getPublicDraftMatches(
+            @RequestParam(required = false) String sportType) {
+        try {
+            logger.info("[DRAFT_MATCH_PUBLIC] Requesting public draft matches for sport: {}", sportType);
+            
+            List<DraftMatchDto> publicMatches = draftMatchService.getPublicDraftMatches(sportType);
+            
+            logger.info("[DRAFT_MATCH_PUBLIC] Successfully retrieved {} public draft matches", 
+                       publicMatches.size());
+            
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "Public draft matches retrieved successfully", publicMatches)
+            );
+            
+        } catch (Exception e) {
+            logger.error("[DRAFT_MATCH_PUBLIC] Error retrieving public draft matches: {}", 
+                        e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(false, "Failed to retrieve public draft matches: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * Get ranked draft matches using AI
      * GET /api/draft-matches/ranked
      */
     @GetMapping("/ranked")
     public ResponseEntity<ApiResponse<List<DraftMatchDto>>> getRankedDraftMatches(
-            @RequestParam(required = false) String sportType) {
+            @RequestParam(required = false) String sport) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         
         try {
             logger.info("[DRAFT_MATCH_RANKED] User {} requesting ranked draft matches for sport: {}", 
-                       userDetails.getId(), sportType);
+                       userDetails.getId(), sport);
             
             User currentUser = userRepository.findById(userDetails.getId()).orElse(null);
             if (currentUser == null) {
@@ -424,20 +451,20 @@ public class DraftMatchController {
                     .body(new ApiResponse<>(false, "User not found", null));
             }
             
-            List<DraftMatchDto> rankedMatches = draftMatchService.getRankedDraftMatches(userDetails.getId(), sportType);
+            List<DraftMatchDto> rankedMatches = draftMatchService.getRankedDraftMatches(userDetails.getId(), sport);
             
             logger.info("[DRAFT_MATCH_RANKED] Successfully retrieved {} ranked draft matches for user {}", 
                        rankedMatches.size(), userDetails.getId());
             
             return ResponseEntity.ok(
-                new ApiResponse<>(true, "Draft matches retrieved successfully", rankedMatches)
+                new ApiResponse<>(true, "Ranked draft matches retrieved successfully", rankedMatches)
             );
             
         } catch (Exception e) {
             logger.error("[DRAFT_MATCH_RANKED] Error retrieving ranked draft matches for user {}: {}", 
                         userDetails.getId(), e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(false, "Failed to retrieve draft matches: " + e.getMessage(), null));
+                .body(new ApiResponse<>(false, "Failed to retrieve ranked draft matches: " + e.getMessage(), null));
         }
     }
     

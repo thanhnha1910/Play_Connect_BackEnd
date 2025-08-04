@@ -235,9 +235,8 @@ public class LocationService {
         if (field.getCategory() != null) {
             response.setCategoryName(field.getCategory().getName());
         }
-        response.setThumbnailImageUrl(null); // TODO: Implement as needed
-        // Ví dụ:
-        // response.setThumbnailImageUrl(field.getSomeImageUrlField());
+        response.setThumbnailImageUrl(field.getThumbnailUrl()); // Use actual thumbnail URL
+        response.setImageGallery(field.getImageGallery()); // Use actual image gallery
 
         return response;
     }
@@ -249,13 +248,33 @@ public class LocationService {
         response.setSlug(location.getSlug());
         response.setAddress(location.getAddress());
 
-        // Temporarily set default values to avoid complex queries
-        // TODO: Re-enable complex queries once database schema is confirmed
-        response.setFieldCount(0);
-        response.setAverageRating(null);
-        response.setStartingPrice(null);
-        response.setBookingCount(0L);
-        response.setMainImageUrl(null);
+        // Get field count
+        Integer fieldCount = locationRepository.countFieldsByLocationId(location.getLocationId());
+        response.setFieldCount(fieldCount != null ? fieldCount : 0);
+        
+        // Get average rating
+        BigDecimal averageRating = locationRepository.getAverageRatingByLocationId(location.getLocationId());
+        response.setAverageRating(averageRating != null ? averageRating.doubleValue() : null);
+        
+        // Get starting price (minimum hourly rate from fields)
+        Integer minHourlyRate = locationRepository.getMinimumHourlyRateByLocationId(location.getLocationId());
+        response.setStartingPrice(minHourlyRate != null ? new BigDecimal(minHourlyRate) : null);
+        
+        // Get booking count (last 30 days)
+        java.time.Instant thirtyDaysAgo = java.time.Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS);
+        Long bookingCount = locationRepository.getBookingCountByLocationId(location.getLocationId(), thirtyDaysAgo);
+        response.setBookingCount(bookingCount != null ? bookingCount : 0L);
+        
+        // Set main image URL from location's thumbnail or first field's thumbnail
+        String mainImageUrl = location.getThumbnailUrl();
+        if (mainImageUrl == null || mainImageUrl.isEmpty()) {
+            // Try to get thumbnail from first field
+            List<Field> fields = fieldRepository.getFieldsByLocationId(location.getLocationId());
+            if (!fields.isEmpty()) {
+                mainImageUrl = fields.get(0).getThumbnailUrl();
+            }
+        }
+        response.setMainImageUrl(mainImageUrl);
 
         return response;
     }
@@ -323,12 +342,14 @@ public class LocationService {
                                         // Fetch bookings for this field
                                         List<BookingDTO> fieldBookings = bookingService.getBookingsByDate(startInstant, endInstant, field.getFieldId());
                                         
-                                        // Create FieldDTO with bookings
+                                        // Create FieldDTO with bookings and thumbnail
                                         FieldDTO fieldDTO = new FieldDTO(
                                                 field.getFieldId(),
                                                 field.getName(),
                                                 field.getDescription(),
-                                                field.getHourlyRate()
+                                                field.getHourlyRate(),
+                                                field.getThumbnailUrl(),
+                                                field.getImageGallery()
                                         );
                                         fieldDTO.setBookings(fieldBookings);
                                         return fieldDTO;

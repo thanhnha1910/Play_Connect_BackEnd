@@ -297,6 +297,8 @@ public class FieldService {
         dto.setLocationName(field.getLocation().getName());
         dto.setIsActive(field.getIsActive());
         dto.setHourlyRate(field.getHourlyRate());
+        dto.setThumbnailUrl(field.getThumbnailUrl());
+        dto.setImageGallery(field.getImageGallery());
         return dto;
     }
     
@@ -321,6 +323,17 @@ public class FieldService {
         dto.setLocationId(location.getLocationId());
         dto.setName(location.getName());
         dto.setAddress(location.getAddress());
+        dto.setCity(location.getCity());
+        dto.setCountry(location.getCountry());
+        dto.setThumbnailUrl(location.getThumbnailUrl());
+        
+        // Tính toán số lượng fields và field types
+        int fieldCount = fieldRepository.findByLocation_LocationId(location.getLocationId()).size();
+        int fieldTypeCount = fieldTypeRepository.findByLocation_LocationId(location.getLocationId()).size();
+        
+        dto.setFieldCount(fieldCount);
+        dto.setFieldTypeCount(fieldTypeCount);
+        
         return dto;
     }
 }
