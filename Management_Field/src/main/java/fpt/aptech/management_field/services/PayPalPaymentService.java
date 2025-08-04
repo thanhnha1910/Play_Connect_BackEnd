@@ -59,7 +59,7 @@ public class PayPalPaymentService {
         requestBody.put("intent", "CAPTURE");
         requestBody.put("purchase_units", Collections.singletonList(Map.of(
                 "amount", Map.of(
-                        "currency_code", "VND",
+                        "currency_code", "USD",
                         "value", String.format("%.2f", amount)
                 ),
                 "description", description,

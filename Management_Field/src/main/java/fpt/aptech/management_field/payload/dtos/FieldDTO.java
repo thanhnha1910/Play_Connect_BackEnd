@@ -14,6 +14,8 @@ public class FieldDTO {
     private String name;
     private String description;
     private Integer hourlyRate;
+    private String thumbnailUrl;
+    private String imageGallery;
     private List<BookingDTO> bookings;
     
     // Constructor without bookings for backward compatibility
@@ -22,5 +24,15 @@ public class FieldDTO {
         this.name = name;
         this.description = description;
         this.hourlyRate = hourlyRate;
+    }
+    
+    // Constructor with thumbnail for field display
+    public FieldDTO(Long id, String name, String description, Integer hourlyRate, String thumbnailUrl, String imageGallery) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.hourlyRate = hourlyRate;
+        this.thumbnailUrl = thumbnailUrl;
+        this.imageGallery = imageGallery;
     }
 }

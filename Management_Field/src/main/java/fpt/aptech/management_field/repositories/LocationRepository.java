@@ -74,7 +74,7 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
     // Find all locations sorted by average rating (highest first)
     @Query("SELECT l FROM Location l " +
            "LEFT JOIN LocationReview lr ON l.locationId = lr.location.locationId " +
-           "GROUP BY l.locationId, l.name, l.address, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
+           "GROUP BY l.locationId, l.name, l.address, l.city, l.country, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
            "ORDER BY AVG(lr.rating) DESC NULLS LAST")
     List<Location> findAllSortedByRating();
     
@@ -83,7 +83,7 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
            "LEFT JOIN Field f ON l.locationId = f.location.locationId " +
            "LEFT JOIN Booking b ON f.fieldId = b.field.fieldId " +
            "AND b.fromTime > :thirtyDaysAgo " +
-           "GROUP BY l.locationId, l.name, l.address, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
+           "GROUP BY l.locationId, l.name, l.address, l.city, l.country, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
            "ORDER BY COUNT(b.bookingId) DESC")
     List<Location> findAllSortedByPopularity(@Param("thirtyDaysAgo") java.time.Instant thirtyDaysAgo);
     

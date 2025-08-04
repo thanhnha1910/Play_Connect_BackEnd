@@ -12,5 +12,6 @@ import java.math.BigDecimal;
 public class LocationReviewDTO {
     private BigDecimal rating;
     private String comment;
-    private UserDTO user;
+    private UserDto user; // Sửa từ UserDTO thành UserDto
+    
 }

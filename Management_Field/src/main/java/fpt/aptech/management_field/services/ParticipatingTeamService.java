@@ -20,7 +20,10 @@ public class ParticipatingTeamService {
 
     public ParticipatingTeam confirmRegistration(Long participantId) {
         ParticipatingTeam participant = getById(participantId);
-        participant.setStatus("COMPLETED");
+        if (participant == null) {
+            throw new RuntimeException("Participating team not found with ID: " + participantId);
+        }
+        participant.setStatus("CONFIRMED");
         return participatingTeamRepository.save(participant);
     }
 }

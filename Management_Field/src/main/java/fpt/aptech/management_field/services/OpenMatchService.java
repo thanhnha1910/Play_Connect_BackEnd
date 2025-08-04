@@ -50,6 +50,8 @@ public class OpenMatchService {
     @Autowired
     private AIRecommendationService aiRecommendationService;
     
+
+    
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
     
@@ -59,15 +61,19 @@ public class OpenMatchService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     public OpenMatchDto createOpenMatch(CreateOpenMatchRequest request, Long creatorUserId) {
-        // Validate booking exists and belongs to user
+        // Validate booking exists
         Optional<Booking> bookingOpt = bookingRepository.findById(request.getBookingId());
         if (bookingOpt.isEmpty()) {
             throw new RuntimeException("Booking not found");
         }
         
         Booking booking = bookingOpt.get();
-        if (!booking.getUser().getId().equals(creatorUserId)) {
-            throw new RuntimeException("You can only create open matches for your own bookings");
+        
+        // If user is authenticated, validate booking ownership
+        if (creatorUserId != null) {
+            if (!booking.getUser().getId().equals(creatorUserId)) {
+                throw new RuntimeException("You can only create open matches for your own bookings");
+            }
         }
         
         // Check if open match already exists for this booking
@@ -76,14 +82,21 @@ public class OpenMatchService {
             throw new RuntimeException("Open match already exists for this booking");
         }
         
-        Optional<User> userOpt = userRepository.findById(creatorUserId);
-        if (userOpt.isEmpty()) {
-            throw new RuntimeException("User not found");
+        User creatorUser = null;
+        if (creatorUserId != null) {
+            Optional<User> userOpt = userRepository.findById(creatorUserId);
+            if (userOpt.isEmpty()) {
+                throw new RuntimeException("User not found");
+            }
+            creatorUser = userOpt.get();
+        } else {
+            // For anonymous users, use the booking's user as creator
+            creatorUser = booking.getUser();
         }
         
         OpenMatch openMatch = new OpenMatch();
         openMatch.setBooking(booking);
-        openMatch.setCreatorUser(userOpt.get());
+        openMatch.setCreatorUser(creatorUser);
         openMatch.setSportType(request.getSportType());
         openMatch.setSlotsNeeded(request.getSlotsNeeded());
         
@@ -109,60 +122,66 @@ public class OpenMatchService {
         List<OpenMatch> openMatches = openMatchRepository.findAllOpenMatches();
         List<OpenMatchDto> matchDtos = openMatches.stream().map(this::convertToDto).toList();
         
-        // Enrich with AI scores using the centralized method
-        try {
-            return aiRecommendationService.enrichMatchesWithAiScores(matchDtos, null, null);
-        } catch (Exception e) {
-            log.warn("Failed to enrich matches with AI scores: {}", e.getMessage());
-            return matchDtos;
-        }
+        // Return matches without AI ranking (AI ranking functionality removed)
+        return matchDtos;
     }
     
     public List<OpenMatchDto> getAllOpenMatches(Long userId) {
         List<OpenMatch> openMatches = openMatchRepository.findAllOpenMatches();
+        
+        if (userId != null) {
+            // Calculate compatibility scores using AIRecommendationService
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                List<OpenMatchDto> matchDtos = openMatches.stream().map(match -> {
+                    return convertToDto(match, userId, null);
+                }).toList();
+                
+                // Calculate compatibility scores for each match
+                return calculateCompatibilityScores(user, matchDtos, null);
+            }
+        }
+        
+        // For unauthenticated users, return matches without compatibility scores
         List<OpenMatchDto> matchDtos = openMatches.stream().map(match -> {
-            // Don't set default compatibility score - let AI service handle it or leave as null
             return convertToDto(match, userId, null);
         }).toList();
         
-        // Enrich with AI scores using the centralized method
-        try {
-            Optional<User> userOpt = userId != null ? userRepository.findById(userId) : Optional.empty();
-            return aiRecommendationService.enrichMatchesWithAiScores(matchDtos, userOpt.orElse(null), null);
-        } catch (Exception e) {
-            log.warn("Failed to enrich matches with AI scores for user {}: {}", userId, e.getMessage());
-            return matchDtos;
-        }
+        return matchDtos;
     }
     
     public List<OpenMatchDto> getOpenMatchesBySport(String sportType) {
         List<OpenMatch> openMatches = openMatchRepository.findOpenMatchesBySportType(sportType);
         List<OpenMatchDto> matchDtos = openMatches.stream().map(this::convertToDto).toList();
         
-        // Enrich with AI scores using the centralized method
-        try {
-            return aiRecommendationService.enrichMatchesWithAiScores(matchDtos, null, sportType);
-        } catch (Exception e) {
-            log.warn("Failed to enrich matches with AI scores for sport {}: {}", sportType, e.getMessage());
-            return matchDtos;
-        }
+        // Return matches without AI ranking (AI ranking functionality removed)
+        return matchDtos;
     }
     
     public List<OpenMatchDto> getOpenMatchesBySport(String sportType, Long userId) {
         List<OpenMatch> openMatches = openMatchRepository.findOpenMatchesBySportType(sportType);
+        
+        if (userId != null) {
+            // Calculate compatibility scores using AIRecommendationService
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                List<OpenMatchDto> matchDtos = openMatches.stream().map(match -> {
+                    return convertToDto(match, userId, null);
+                }).toList();
+                
+                // Calculate compatibility scores for each match
+                return calculateCompatibilityScores(user, matchDtos, sportType);
+            }
+        }
+        
+        // For unauthenticated users, return matches without compatibility scores
         List<OpenMatchDto> matchDtos = openMatches.stream().map(match -> {
-            // Don't set default compatibility score - let AI service handle it or leave as null
             return convertToDto(match, userId, null);
         }).toList();
         
-        // Enrich with AI scores using the centralized method
-        try {
-            Optional<User> userOpt = userId != null ? userRepository.findById(userId) : Optional.empty();
-            return aiRecommendationService.enrichMatchesWithAiScores(matchDtos, userOpt.orElse(null), sportType);
-        } catch (Exception e) {
-            log.warn("Failed to enrich matches with AI scores for user {} and sport {}: {}", userId, sportType, e.getMessage());
-            return matchDtos;
-        }
+        return matchDtos;
     }
     
     public List<OpenMatchDto> getRankedOpenMatches(Long userId, String sportType) {
@@ -175,107 +194,53 @@ public class OpenMatchService {
             }
             
             User user = userOpt.get();
-            List<OpenMatchDto> openMatches;
+            log.info("[RECOMMENDATION_RANKING] getRankedOpenMatches - userId: {}, sportType: {}", userId, sportType);
             
+            // Get basic matches without AI enrichment first
+            List<OpenMatch> openMatches;
             if (sportType != null && !sportType.isEmpty()) {
-                openMatches = getOpenMatchesBySport(sportType, userId);
+                openMatches = openMatchRepository.findOpenMatchesBySportType(sportType);
             } else {
-                openMatches = getAllOpenMatches(userId);
+                openMatches = openMatchRepository.findAllOpenMatches();
             }
+            List<OpenMatchDto> matchDtos = openMatches.stream().map(match -> {
+                return convertToDto(match, userId, null);
+            }).toList();
             
-            // Use AI service to rank matches if available
-            if (aiRecommendationService != null && sportType != null) {
-                try {
-                    // Check if AI service is available
-                    boolean isAIAvailable = aiRecommendationService.isAIServiceAvailable();
-                    System.out.println("[DEBUG] AI Service available: " + isAIAvailable);
-                    
-                    if (isAIAvailable) {
-                        // Try hybrid ranking first, fallback to legacy if needed
-                        List<OpenMatchDto> rankedMatches;
-                        try {
-                            rankedMatches = aiRecommendationService.rankOpenMatchesHybrid(user, openMatches, sportType);
-                            System.out.println("[DEBUG] Using hybrid ranking model");
-                        } catch (Exception hybridException) {
-                            System.out.println("[DEBUG] Hybrid ranking failed, falling back to legacy: " + hybridException.getMessage());
-                            rankedMatches = aiRecommendationService.rankOpenMatches(user, openMatches, sportType);
-                        }
-                        
-                        // Debug logging to verify compatibilityScore is being set
-                        System.out.println("=== DEBUG: Ranked matches returned from AI service ===");
-                        for (OpenMatchDto match : rankedMatches) {
-                            System.out.println(String.format("Match ID: %d, CompatibilityScore: %s, CreatorId: %d", 
-                                match.getId(), 
-                                match.getCompatibilityScore() != null ? match.getCompatibilityScore().toString() : "NULL",
-                                match.getCreatorUserId()));
-                        }
-                        System.out.println("=== END DEBUG ===");
-                        
-                        // Add production logging for compatibility score verification
-                        log.info("[COMPATIBILITY_AUDIT] Final ranked matches for user {}: {} matches returned", userId, rankedMatches.size());
-                        for (OpenMatchDto match : rankedMatches) {
-                            log.info("[COMPATIBILITY_AUDIT] Match ID: {}, CompatibilityScore: {}, CreatorId: {}", 
-                                match.getId(), 
-                                match.getCompatibilityScore(), 
-                                match.getCreatorUserId());
-                        }
-                        
-                        // AI service already returns properly formatted DTOs with compatibility scores
-                        // No need to convert again - just return the ranked matches directly
-                        return rankedMatches;
-                    } else {
-                        System.out.println("[DEBUG] AI Service not available, returning unranked matches");
-                    }
-                } catch (Exception aiException) {
-                    System.err.println("[ERROR] AI Service failed: " + aiException.getMessage());
-                    aiException.printStackTrace();
-                    // Continue with unranked matches if AI service fails
-                }
-            } else {
-                System.out.println("[DEBUG] AI Service is null or sportType is null");
-            }
+            log.info("[RECOMMENDATION_RANKING] Found {} matches before recommendation ranking", matchDtos.size());
             
-            return openMatches;
+            // Use recommendation service directly instead of AI ranking service
+            List<OpenMatchDto> rankedMatches = aiRecommendationService.fallbackRankOpenMatches(user, matchDtos, sportType);
+            
+            log.info("[RECOMMENDATION_RANKING] Successfully ranked {} matches using recommendation service", rankedMatches.size());
+            return rankedMatches;
             
         } catch (Exception e) {
-            System.err.println("[ERROR] Error in getRankedOpenMatches: " + e.getMessage());
-            e.printStackTrace();
+            log.error("[RECOMMENDATION_RANKING] Error in getRankedOpenMatches: {}", e.getMessage(), e);
             
-            // Fallback: return empty list or basic matches without user context
+            // Final fallback: return unranked matches
             try {
                 if (sportType != null && !sportType.isEmpty()) {
-                    return getOpenMatchesBySport(sportType);
+                    return getOpenMatchesBySport(sportType, userId);
                 } else {
-                    return getAllOpenMatches();
+                    return getAllOpenMatches(userId);
                 }
-            } catch (Exception fallbackException) {
-                System.err.println("[ERROR] Fallback also failed: " + fallbackException.getMessage());
+            } catch (Exception finalFallbackException) {
+                log.error("[RECOMMENDATION_RANKING] Final fallback also failed: {}", finalFallbackException.getMessage());
                 return new ArrayList<>();
             }
         }
     }
     
+    public List<OpenMatchDto> getRankedOpenMatchesV2(Long userId, String sportType) {
+        return getRankedOpenMatches(userId, sportType);
+    }
+
     public List<OpenMatchDto> getUserOpenMatches(Long userId) {
         List<OpenMatch> openMatches = openMatchRepository.findByCreatorUserId(userId);
         List<OpenMatchDto> matchDtos = openMatches.stream().map(this::convertToDto).toList();
         
-        // Enrich user's own matches with AI scores
-        if (userId != null && !matchDtos.isEmpty()) {
-            try {
-                Optional<User> userOpt = userRepository.findById(userId);
-                if (userOpt.isPresent()) {
-                    User user = userOpt.get();
-                    // Use "general" as default sport type for user's own matches
-                    List<OpenMatchDto> enrichedMatches = aiRecommendationService.enrichMatchesWithAiScores(matchDtos, user, "general");
-                    log.info("[AI_ENRICHMENT] getUserOpenMatches(userId={}) enriched {} matches with AI scores", userId, enrichedMatches.size());
-                    return enrichedMatches;
-                } else {
-                    log.warn("[AI_ENRICHMENT] User {} not found, returning matches without AI enrichment", userId);
-                }
-            } catch (Exception e) {
-                log.error("[AI_ENRICHMENT] Error enriching user matches for user {}: {}", userId, e.getMessage(), e);
-            }
-        }
+        // Return user's own matches without AI ranking (AI ranking functionality removed)
         
         return matchDtos;
     }
@@ -615,5 +580,23 @@ public class OpenMatchService {
         }
         
         return "NOT_JOINED";
+    }
+    
+    private List<OpenMatchDto> calculateCompatibilityScores(User user, List<OpenMatchDto> matchDtos, String sportType) {
+        try {
+            log.info("[COMPATIBILITY_CALCULATION] Calculating compatibility scores for {} matches", matchDtos.size());
+            
+            // Use AIRecommendationService to calculate compatibility scores
+            // This will set compatibility scores but won't sort by AI ranking
+            List<OpenMatchDto> matchesWithScores = aiRecommendationService.fallbackRankOpenMatches(user, matchDtos, sportType);
+            
+            log.info("[COMPATIBILITY_CALCULATION] Successfully calculated compatibility scores for {} matches", matchesWithScores.size());
+            return matchesWithScores;
+            
+        } catch (Exception e) {
+            log.error("[COMPATIBILITY_CALCULATION] Error calculating compatibility scores: {}", e.getMessage(), e);
+            // Return original matches without compatibility scores if calculation fails
+            return matchDtos;
+        }
     }
 }

@@ -73,6 +73,13 @@ public class UserController {
             response.put("profilePicture", user.getProfilePicture());
             response.put("isDiscoverable", user.getIsDiscoverable());
             
+            // Add membership-related fields
+            response.put("bookingCount", user.getBookingCount() != null ? user.getBookingCount() : 0);
+            response.put("memberLevel", user.getMemberLevel() != null ? user.getMemberLevel() : 1);
+            response.put("hasCompletedProfile", user.isHasCompletedProfile());
+            response.put("status", user.getStatus());
+            response.put("roles", user.getRoles());
+            
             // Parse sport profiles from JSON
             if (user.getSportProfiles() != null) {
                 try {

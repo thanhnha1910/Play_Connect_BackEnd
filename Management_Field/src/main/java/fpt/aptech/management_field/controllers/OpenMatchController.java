@@ -5,6 +5,7 @@ import fpt.aptech.management_field.models.User;
 import fpt.aptech.management_field.payload.dtos.OpenMatchDto;
 import fpt.aptech.management_field.payload.request.CreateOpenMatchRequest;
 import fpt.aptech.management_field.payload.response.MessageResponse;
+import fpt.aptech.management_field.payload.response.ApiResponse;
 import fpt.aptech.management_field.repositories.UserRepository;
 import fpt.aptech.management_field.security.services.UserDetailsImpl;
 import fpt.aptech.management_field.services.AIRecommendationService;
@@ -21,11 +22,15 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
 @RequestMapping("/api/open-matches")
 public class OpenMatchController {
+    
+    private static final Logger logger = LoggerFactory.getLogger(OpenMatchController.class);
 
     @Autowired
     private OpenMatchService openMatchService;
@@ -39,88 +44,147 @@ public class OpenMatchController {
     private static final double MINIMUM_COMPATIBILITY_THRESHOLD = 0.6;
 
     @PostMapping
-    @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<?> createOpenMatch(@Valid @RequestBody CreateOpenMatchRequest request) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        
+    public ResponseEntity<ApiResponse<OpenMatchDto>> createOpenMatch(@Valid @RequestBody CreateOpenMatchRequest request) {
         try {
-            OpenMatchDto openMatch = openMatchService.createOpenMatch(request, userDetails.getId());
-            return ResponseEntity.ok(openMatch);
+            // Get current user ID if authenticated (optional)
+            Long userId = null;
+            try {
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                if (authentication != null && authentication.isAuthenticated() && 
+                    !"anonymousUser".equals(authentication.getPrincipal())) {
+                    UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+                    userId = userDetails.getId();
+                    logger.info("[CREATE_OPEN_MATCH] Authenticated user {} creating open match", userId);
+                } else {
+                    logger.info("[CREATE_OPEN_MATCH] Anonymous user creating open match");
+                }
+            } catch (Exception e) {
+                logger.warn("[CREATE_OPEN_MATCH] Authentication check failed, proceeding as anonymous: {}", e.getMessage());
+            }
+            
+            OpenMatchDto openMatch = openMatchService.createOpenMatch(request, userId);
+            
+            logger.info("[CREATE_OPEN_MATCH] Successfully created open match with ID {} for user {}", 
+                       openMatch.getId(), userId != null ? userId : "anonymous");
+            
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "Open match created successfully", openMatch)
+            );
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Error creating open match: " + e.getMessage()));
+            logger.error("[CREATE_OPEN_MATCH] Error creating open match: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                .body(new ApiResponse<>(false, "Error creating open match: " + e.getMessage(), null));
         }
     }
 
     @GetMapping
-    public ResponseEntity<List<OpenMatchDto>> getAllOpenMatches(
+    public ResponseEntity<ApiResponse<List<OpenMatchDto>>> getAllOpenMatches(
             @RequestParam(required = false) String sportType) {
         
-        // Get current user ID if authenticated (optional)
-        Long userId = null;
+        System.out.println("🚀🚀🚀 getAllOpenMatches CONTROLLER CALLED 🚀🚀🚀");
+        System.out.println("🚀 sportType parameter: " + sportType);
+        logger.info("[DEBUG] ===== getAllOpenMatches CONTROLLER CALLED =====");
+        logger.info("[DEBUG] sportType parameter: {}", sportType);
+        
         try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null && authentication.isAuthenticated() && 
-                !"anonymousUser".equals(authentication.getPrincipal())) {
-                UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-                userId = userDetails.getId();
+            // Get current user ID if authenticated (optional)
+            Long userId = null;
+            try {
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                logger.info("[DEBUG] Authentication object: {}", authentication);
+                if (authentication != null && authentication.isAuthenticated() && 
+                    !"anonymousUser".equals(authentication.getPrincipal())) {
+                    UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+                    userId = userDetails.getId();
+                    logger.info("[DEBUG] Extracted userId: {}", userId);
+                } else {
+                    logger.info("[DEBUG] No authenticated user found or anonymous user");
+                }
+            } catch (Exception e) {
+                logger.warn("[DEBUG] Error extracting userId: {}", e.getMessage());
+                // If authentication fails, continue with null userId
             }
+            
+            List<OpenMatchDto> openMatches;
+            if (sportType != null && !sportType.isEmpty()) {
+                if (userId != null) {
+                    openMatches = openMatchService.getOpenMatchesBySport(sportType, userId);
+                } else {
+                    openMatches = openMatchService.getOpenMatchesBySport(sportType);
+                }
+            } else {
+                if (userId != null) {
+                    openMatches = openMatchService.getAllOpenMatches(userId);
+                } else {
+                    openMatches = openMatchService.getAllOpenMatches();
+                }
+            }
+            
+            logger.info("[DEBUG] Successfully retrieved {} open matches", openMatches.size());
+            
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "Open matches retrieved successfully", openMatches)
+            );
+            
         } catch (Exception e) {
-            // If authentication fails, continue with null userId
+            logger.error("[DEBUG] Error retrieving open matches: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(false, "Failed to retrieve open matches: " + e.getMessage(), null));
         }
-        
-        List<OpenMatchDto> openMatches;
-        if (sportType != null && !sportType.isEmpty()) {
-            if (userId != null) {
-                openMatches = openMatchService.getOpenMatchesBySport(sportType, userId);
-            } else {
-                openMatches = openMatchService.getOpenMatchesBySport(sportType);
-            }
-        } else {
-            if (userId != null) {
-                openMatches = openMatchService.getAllOpenMatches(userId);
-            } else {
-                openMatches = openMatchService.getAllOpenMatches();
-            }
-        }
-        
-        return ResponseEntity.ok(openMatches);
     }
     
     @GetMapping("/ranked")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<?> getRankedOpenMatches(
+    public ResponseEntity<ApiResponse<List<OpenMatchDto>>> getRankedOpenMatches(
             @RequestParam(required = false) String sportType) {
         
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
         try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            
-            System.out.println("[DEBUG] getRankedOpenMatches called - userId: " + userDetails.getId() + ", sportType: " + sportType);
+            logger.info("[AI_RANKING] getRankedOpenMatches called - userId: {}, sportType: {}", userDetails.getId(), sportType);
             
             List<OpenMatchDto> rankedMatches = openMatchService.getRankedOpenMatches(userDetails.getId(), sportType);
             
-            System.out.println("[DEBUG] Successfully retrieved " + rankedMatches.size() + " ranked matches");
+            logger.info("[AI_RANKING] Successfully retrieved {} ranked open matches for user {}", 
+                       rankedMatches.size(), userDetails.getId());
             
-            return ResponseEntity.ok(rankedMatches);
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "Ranked open matches retrieved successfully", rankedMatches)
+            );
             
         } catch (Exception e) {
-            System.err.println("[ERROR] Exception in getRankedOpenMatches: " + e.getMessage());
-            e.printStackTrace();
-            
-            // Return error response instead of letting it bubble up as 500
-            return ResponseEntity.status(500).body(new MessageResponse("Error retrieving ranked matches: " + e.getMessage()));
+            logger.error("[AI_RANKING] Error retrieving ranked open matches for user {}: {}", 
+                        userDetails.getId(), e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(false, "Failed to retrieve ranked open matches: " + e.getMessage(), null));
         }
     }
 
     @GetMapping("/my-matches")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<List<OpenMatchDto>> getMyOpenMatches() {
+    public ResponseEntity<ApiResponse<List<OpenMatchDto>>> getMyOpenMatches() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         
-        List<OpenMatchDto> openMatches = openMatchService.getUserOpenMatches(userDetails.getId());
-        return ResponseEntity.ok(openMatches);
+        try {
+            logger.info("[MY_MATCHES] User {} requesting their open matches", userDetails.getId());
+            
+            List<OpenMatchDto> openMatches = openMatchService.getUserOpenMatches(userDetails.getId());
+            
+            logger.info("[MY_MATCHES] Successfully retrieved {} open matches for user {}", 
+                       openMatches.size(), userDetails.getId());
+            
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "My open matches retrieved successfully", openMatches)
+            );
+            
+        } catch (Exception e) {
+            logger.error("[MY_MATCHES] Error retrieving open matches for user {}: {}", 
+                        userDetails.getId(), e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(false, "Failed to retrieve my open matches: " + e.getMessage(), null));
+        }
     }
 
     @PutMapping("/{id}/close")
@@ -202,6 +266,20 @@ public class OpenMatchController {
         }
     }
     
+    @GetMapping("/ranked-v2")
+    @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
+    public ResponseEntity<List<OpenMatchDto>> getRankedOpenMatchesV2(
+            @RequestParam(required = false) String sportType) {
+        
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        logger.info("[AI_RANKING] getRankedOpenMatchesV2 called - userId: {}, sportType: {}", userDetails.getId(), sportType);
+        
+        List<OpenMatchDto> rankedMatches = openMatchService.getRankedOpenMatchesV2(userDetails.getId(), sportType);
+        return ResponseEntity.ok(rankedMatches);
+    }
+
     // Recommend teammates for community open matches using same logic as RecommendationModal
     @GetMapping("/recommend-teammates")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")

@@ -19,14 +19,14 @@ public class FileUploadService {
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
     
-    @Value("${app.base.url:http://localhost:8080}")
+    @Value("${app.base.url:http://localhost:1444}")
     private String baseUrl;
     
     public List<String> uploadFiles(MultipartFile[] files) throws IOException {
         List<String> urls = new ArrayList<>();
         
         // Create upload directory if it doesn't exist
-        Path uploadPath = Paths.get(uploadDir);
+        Path uploadPath = Paths.get(uploadDir, "images");
         if (!Files.exists(uploadPath)) {
             Files.createDirectories(uploadPath);
         }
@@ -39,12 +39,13 @@ public class FileUploadService {
                     fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
                 }
                 
-                String filename = UUID.randomUUID().toString() + fileExtension;
+                // Add timestamp prefix to filename for uniqueness
+                String filename = System.currentTimeMillis() + "_" + UUID.randomUUID().toString() + fileExtension;
                 Path filePath = uploadPath.resolve(filename);
                 
                 Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
                 
-                String fileUrl = baseUrl + "/uploads/" + filename;
+                String fileUrl = baseUrl + "/uploads/images/" + filename;
                 urls.add(fileUrl);
             }
         }

@@ -59,8 +59,46 @@ public class TournamentController {
             Payment payment = paymentService.getPayment(paymentId);
             participant.setEntryPayment(payment);
             participatingTeamService.save(participant);
-            return new RedirectView("http://localhost:3000/en/tournament/register/success?tournament=" + participant.getTournament().getSlug());
+            // Redirect to public receipt page (no authentication required)
+            return new RedirectView("http://localhost:3000/en/tournament/receipt/" + participant.getTournament().getTournamentId() + "?status=success");
         }
         return new RedirectView("http://localhost:3000/en/tournament/register/failure");
+    }
+
+    // Public endpoint to get tournament registration details for receipt page (used by PayPal callback)
+    @GetMapping("/public-receipt/{tournamentId}")
+    public ResponseEntity<?> getTournamentPublicReceipt(@PathVariable Long tournamentId) {
+        try {
+            Map<String, Object> receiptData = tournamentService.getTournamentPublicReceipt(tournamentId);
+            return ResponseEntity.ok(Map.of(
+                "tournament", receiptData.get("tournament"),
+                "participation", receiptData.get("participation"),
+                "message", "Tournament receipt retrieved successfully"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Failed to fetch tournament receipt: " + e.getMessage(),
+                "success", false
+            ));
+        }
+    }
+
+    // Authenticated endpoint to get tournament registration details for receipt page
+    @GetMapping("/receipt/{tournamentId}")
+    @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getTournamentReceipt(@PathVariable Long tournamentId) {
+        try {
+            Map<String, Object> receiptData = tournamentService.getTournamentReceipt(tournamentId);
+            return ResponseEntity.ok(Map.of(
+                "tournament", receiptData.get("tournament"),
+                "participation", receiptData.get("participation"),
+                "message", "Tournament receipt retrieved successfully"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Failed to fetch tournament receipt: " + e.getMessage(),
+                "success", false
+            ));
+        }
     }
 }

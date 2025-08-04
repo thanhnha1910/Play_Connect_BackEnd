@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fpt.aptech.management_field.models.DraftMatch;
+import fpt.aptech.management_field.models.DraftMatchStatus;
 import fpt.aptech.management_field.models.DraftMatchUserStatus;
 import fpt.aptech.management_field.models.Notification;
 import fpt.aptech.management_field.models.User;
@@ -56,14 +57,23 @@ public class DraftMatchService {
     @Autowired
     private AIRecommendationService aiRecommendationService;
     
+
+    
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @Transactional
     public DraftMatchDto createDraftMatch(CreateDraftMatchRequest request, Long creatorUserId) {
+        log.info("[DEBUG] Creating draft match for user: {}", creatorUserId);
+        log.info("[DEBUG] Request data - sportType: {}, locationDescription: {}, startTime: {}, endTime: {}, slotsNeeded: {}, skillLevel: {}, requiredTags: {}", 
+                request.getSportType(), request.getLocationDescription(), request.getEstimatedStartTime(), 
+                request.getEstimatedEndTime(), request.getSlotsNeeded(), request.getSkillLevel(), request.getRequiredTags());
+        
         Optional<User> userOpt = userRepository.findById(creatorUserId);
         if (userOpt.isEmpty()) {
+            log.error("[DEBUG] User not found: {}", creatorUserId);
             throw new RuntimeException("User not found");
         }
+        log.info("[DEBUG] User found: {}", userOpt.get().getUsername());
         
         DraftMatch draftMatch = new DraftMatch();
         draftMatch.setCreator(userOpt.get());
@@ -74,21 +84,41 @@ public class DraftMatchService {
         draftMatch.setSlotsNeeded(request.getSlotsNeeded());
         draftMatch.setSkillLevel(request.getSkillLevel());
         
+        log.info("[DEBUG] DraftMatch object created, converting tags...");
+        
         // Convert tags list to JSON string
         try {
+            log.info("[DEBUG] Required tags: {}", request.getRequiredTags());
             String tagsJson = objectMapper.writeValueAsString(request.getRequiredTags());
+            log.info("[DEBUG] Tags JSON: {}", tagsJson);
             draftMatch.setRequiredTags(tagsJson);
         } catch (JsonProcessingException e) {
+            log.error("[DEBUG] Error processing required tags: {}", e.getMessage(), e);
             throw new RuntimeException("Error processing required tags", e);
         }
         
-        draftMatch = draftMatchRepository.save(draftMatch);
+        log.info("[DEBUG] Saving draft match to database...");
+        try {
+            draftMatch = draftMatchRepository.save(draftMatch);
+            log.info("[DEBUG] Draft match saved with ID: {}", draftMatch.getId());
+        } catch (Exception e) {
+            log.error("[DEBUG] Error saving draft match: {}", e.getMessage(), e);
+            throw e;
+        }
         
+        log.info("[DEBUG] Converting to DTO...");
         DraftMatchDto dto = convertToDto(draftMatch, creatorUserId);
         
-        // Send real-time update to all subscribers
-        messagingTemplate.convertAndSend("/topic/draft-match/" + draftMatch.getId(), dto);
+        log.info("[DEBUG] Sending WebSocket message...");
+        try {
+            messagingTemplate.convertAndSend("/topic/draft-match/" + draftMatch.getId(), dto);
+            log.info("[DEBUG] WebSocket message sent successfully");
+        } catch (Exception e) {
+            log.error("[DEBUG] Error sending WebSocket message: {}", e.getMessage(), e);
+            // Don't throw here, just log the error
+        }
         
+        log.info("[DEBUG] Draft match creation completed successfully");
         return dto;
     }
     
@@ -102,7 +132,7 @@ public class DraftMatchService {
         DraftMatch draftMatch = draftMatchOpt.get();
         
         // Check if draft match is still recruiting
-        if (!"RECRUITING".equals(draftMatch.getStatus())) {
+        if (!DraftMatchStatus.RECRUITING.equals(draftMatch.getStatus())) {
             throw new RuntimeException("This draft match is no longer recruiting");
         }
         
@@ -134,7 +164,7 @@ public class DraftMatchService {
         // Check if draft match is now full (based on approved users)
         Long approvedCount = draftMatchUserStatusRepository.countApprovedUsersByDraftMatchId(draftMatchId);
         if (approvedCount >= draftMatch.getSlotsNeeded()) {
-            draftMatch.setStatus("FULL");
+            draftMatch.setStatus(DraftMatchStatus.FULL);
             draftMatch = draftMatchRepository.save(draftMatch);
         }
         
@@ -200,8 +230,8 @@ public class DraftMatchService {
         
         // If draft match was full, change status back to recruiting
         Long approvedCount = draftMatchUserStatusRepository.countApprovedUsersByDraftMatchId(draftMatchId);
-        if ("FULL".equals(draftMatch.getStatus()) && approvedCount < draftMatch.getSlotsNeeded()) {
-            draftMatch.setStatus("RECRUITING");
+        if (DraftMatchStatus.FULL.equals(draftMatch.getStatus()) && approvedCount < draftMatch.getSlotsNeeded()) {
+            draftMatch.setStatus(DraftMatchStatus.RECRUITING);
             draftMatch = draftMatchRepository.save(draftMatch);
         }
         
@@ -248,19 +278,27 @@ public class DraftMatchService {
     
     public List<DraftMatchDto> getAllActiveDraftMatches(Long userId) {
         List<DraftMatch> draftMatches = draftMatchRepository.findAllActiveDraftMatches();
+        
+        if (userId != null) {
+            // Calculate compatibility scores using AIRecommendationService
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                List<DraftMatchDto> matchDtos = draftMatches.stream()
+                        .map(dm -> convertToDto(dm, userId))
+                        .collect(Collectors.toList());
+                
+                // Calculate compatibility scores for each match
+                return calculateCompatibilityScores(user, matchDtos, null);
+            }
+        }
+        
+        // For unauthenticated users, return matches without compatibility scores
         List<DraftMatchDto> matchDtos = draftMatches.stream()
                 .map(dm -> convertToDto(dm, userId))
                 .collect(Collectors.toList());
         
-        // Enrich with AI scores using the centralized method
-        try {
-            Optional<User> userOpt = userId != null ? userRepository.findById(userId) : Optional.empty();
-            // Use "GENERAL" as default sport type to enable AI scoring for all matches
-            return aiRecommendationService.enrichDraftMatchesWithAiScores(matchDtos, userOpt.orElse(null), "GENERAL");
-        } catch (Exception e) {
-            log.warn("Failed to enrich draft matches with AI scores for user {}: {}", userId, e.getMessage());
-            return matchDtos;
-        }
+        return matchDtos;
     }
     
     public List<DraftMatchDto> getUserDraftMatches(Long userId) {
@@ -269,15 +307,8 @@ public class DraftMatchService {
                 .map(dm -> convertToDto(dm, userId))
                 .collect(Collectors.toList());
         
-        // Enrich user's own draft matches with AI scores using the centralized method
-        try {
-            Optional<User> userOpt = userId != null ? userRepository.findById(userId) : Optional.empty();
-            // Use "GENERAL" as default sport type to enable AI scoring for user's own matches
-            return aiRecommendationService.enrichDraftMatchesWithAiScores(matchDtos, userOpt.orElse(null), "GENERAL");
-        } catch (Exception e) {
-            log.warn("Failed to enrich user draft matches with AI scores for user {}: {}", userId, e.getMessage());
-            return matchDtos;
-        }
+        // Return user's own draft matches without AI ranking (AI ranking functionality removed)
+        return matchDtos;
     }
     
     public List<DraftMatchDto> getDraftMatchesBySport(String sportType) {
@@ -286,13 +317,8 @@ public class DraftMatchService {
                 .map(dm -> convertToDto(dm, null))
                 .collect(Collectors.toList());
         
-        // Enrich with AI scores using the centralized method
-        try {
-            return aiRecommendationService.enrichDraftMatchesWithAiScores(matchDtos, null, sportType);
-        } catch (Exception e) {
-            log.warn("Failed to enrich draft matches with AI scores for sport {}: {}", sportType, e.getMessage());
-            return matchDtos;
-        }
+        // Return draft matches by sport without AI ranking (AI ranking functionality removed)
+        return matchDtos;
     }
     
     public List<DraftMatchDto> getDraftMatchesBySport(String sportType, Long userId) {
@@ -301,14 +327,66 @@ public class DraftMatchService {
                 .map(dm -> convertToDto(dm, userId))
                 .collect(Collectors.toList());
         
-        // Enrich with AI scores using the centralized method
-        try {
-            Optional<User> userOpt = userId != null ? userRepository.findById(userId) : Optional.empty();
-            return aiRecommendationService.enrichDraftMatchesWithAiScores(matchDtos, userOpt.orElse(null), sportType);
-        } catch (Exception e) {
-            log.warn("Failed to enrich draft matches with AI scores for user {} and sport {}: {}", userId, sportType, e.getMessage());
-            return matchDtos;
+        // Return draft matches by sport without AI ranking (AI ranking functionality removed)
+        return matchDtos;
+    }
+    
+    /**
+     * Get public draft matches (no authentication required)
+     * Used for unauthenticated users
+     */
+    public List<DraftMatchDto> getPublicDraftMatches(String sportType) {
+        List<DraftMatch> draftMatches;
+        
+        if (sportType != null && !sportType.trim().isEmpty()) {
+            draftMatches = draftMatchRepository.findActiveDraftMatchesBySportType(sportType);
+            log.info("[PUBLIC_DRAFT_MATCHES] Retrieved {} public draft matches for sport: {}", draftMatches.size(), sportType);
+        } else {
+            draftMatches = draftMatchRepository.findAllActiveDraftMatches();
+            log.info("[PUBLIC_DRAFT_MATCHES] Retrieved {} public draft matches (all sports)", draftMatches.size());
         }
+        
+        List<DraftMatchDto> matchDtos = draftMatches.stream()
+                .map(dm -> convertToDto(dm, null)) // null userId for public access
+                .collect(Collectors.toList());
+        
+        return matchDtos;
+    }
+    
+    /**
+     * Get public draft matches with compatibility scores for authenticated users
+     */
+    public List<DraftMatchDto> getPublicDraftMatches(String sportType, Long userId) {
+        List<DraftMatch> draftMatches;
+        
+        if (sportType != null && !sportType.trim().isEmpty()) {
+            draftMatches = draftMatchRepository.findActiveDraftMatchesBySportType(sportType);
+            log.info("[PUBLIC_DRAFT_MATCHES] Retrieved {} public draft matches for sport: {}", draftMatches.size(), sportType);
+        } else {
+            draftMatches = draftMatchRepository.findAllActiveDraftMatches();
+            log.info("[PUBLIC_DRAFT_MATCHES] Retrieved {} public draft matches (all sports)", draftMatches.size());
+        }
+        
+        if (userId != null) {
+            // Calculate compatibility scores using AIRecommendationService
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                List<DraftMatchDto> matchDtos = draftMatches.stream()
+                        .map(dm -> convertToDto(dm, userId))
+                        .collect(Collectors.toList());
+                
+                // Calculate compatibility scores for each match
+                return calculateCompatibilityScores(user, matchDtos, sportType);
+            }
+        }
+        
+        // For unauthenticated users, return matches without compatibility scores
+        List<DraftMatchDto> matchDtos = draftMatches.stream()
+                .map(dm -> convertToDto(dm, userId))
+                .collect(Collectors.toList());
+        
+        return matchDtos;
     }
     
     private DraftMatchDto convertToDto(DraftMatch draftMatch, Long userId) {
@@ -328,7 +406,7 @@ public class DraftMatchService {
         dto.setEstimatedEndTime(draftMatch.getEstimatedEndTime());
         dto.setSlotsNeeded(draftMatch.getSlotsNeeded());
         dto.setSkillLevel(draftMatch.getSkillLevel());
-        dto.setStatus(draftMatch.getStatus());
+        dto.setStatus(draftMatch.getStatus().toString());
         dto.setCreatedAt(draftMatch.getCreatedAt());
         
         // Convert JSON string back to list
@@ -488,7 +566,7 @@ public class DraftMatchService {
         }
         
         // Change status to AWAITING_CONFIRMATION to lock the draft match
-        draftMatch.setStatus("AWAITING_CONFIRMATION");
+        draftMatch.setStatus(DraftMatchStatus.AWAITING_CONFIRMATION);
         draftMatch = draftMatchRepository.save(draftMatch);
         
         return convertToDto(draftMatch, userId);
@@ -504,47 +582,39 @@ public class DraftMatchService {
             }
             
             User user = userOpt.get();
-            List<DraftMatchDto> draftMatches;
+            log.info("[RECOMMENDATION_RANKING] getRankedDraftMatches - userId: {}, sportType: {}", userId, sportType);
             
-            // Get draft matches based on sport type
-            if (sportType != null && !sportType.isEmpty()) {
-                draftMatches = getDraftMatchesBySport(sportType, userId);
-            } else {
-                draftMatches = getAllActiveDraftMatches(userId);
-            }
+            // Get basic matches without AI enrichment first
+            List<DraftMatch> draftMatches = sportType != null ? 
+                draftMatchRepository.findActiveDraftMatchesBySportType(sportType) :
+                draftMatchRepository.findAllActiveDraftMatches();
             
-            // Use centralized AI enrichment method
-            if (aiRecommendationService != null && sportType != null) {
-                try {
-                    // Use the centralized enrichment method which handles AI ranking
-                    List<DraftMatchDto> rankedMatches = aiRecommendationService.enrichDraftMatchesWithAiScores(draftMatches, user, sportType);
-                    
-                    // Debug logging
-                    log.info("[DRAFT_MATCH_AI] Successfully ranked {} draft matches for user {} with sport {}", rankedMatches.size(), userId, sportType);
-                    for (DraftMatchDto match : rankedMatches) {
-                        log.info("[DRAFT_MATCH_AI] Match ID: {}, CompatibilityScore: {}, ExplicitScore: {}, ImplicitScore: {}", 
-                            match.getId(), match.getCompatibilityScore(), match.getExplicitScore(), match.getImplicitScore());
-                    }
-                    
-                    return rankedMatches;
-                } catch (Exception aiException) {
-                    log.error("[DRAFT_MATCH_AI] AI Service failed: {}", aiException.getMessage(), aiException);
-                    // Continue with unranked matches if AI service fails
-                }
-            } else {
-                log.info("[DRAFT_MATCH_AI] AI Service is null or sportType is null");
-            }
+            List<DraftMatchDto> matchDtos = draftMatches.stream()
+                .map(dm -> convertToDto(dm, userId))
+                .collect(Collectors.toList());
             
-            // Return unranked matches if AI service is not available or fails
-            if (sportType != null && !sportType.isEmpty()) {
-                return getDraftMatchesBySport(sportType, userId);
-            } else {
-                return getAllActiveDraftMatches(userId);
-            }
+            log.info("[RECOMMENDATION_RANKING] Found {} draft matches before recommendation ranking", matchDtos.size());
+            
+            // Use recommendation service for draft matches ranking
+            List<DraftMatchDto> rankedMatches = aiRecommendationService.fallbackRankDraftMatches(user, matchDtos, sportType);
+            
+            log.info("[RECOMMENDATION_RANKING] Successfully ranked {} draft matches using recommendation service", rankedMatches.size());
+            return rankedMatches;
             
         } catch (Exception e) {
-            log.error("Error getting ranked draft matches", e);
-            throw new RuntimeException("Failed to get ranked draft matches: " + e.getMessage());
+            log.error("[RECOMMENDATION_RANKING] Error in getRankedDraftMatches: {}", e.getMessage(), e);
+            
+            // Fallback: return unranked matches
+            try {
+                if (sportType != null && !sportType.isEmpty()) {
+                    return getDraftMatchesBySport(sportType, userId);
+                } else {
+                    return getAllActiveDraftMatches(userId);
+                }
+            } catch (Exception fallbackException) {
+                log.error("[RECOMMENDATION_RANKING] Fallback also failed: {}", fallbackException.getMessage());
+                return new ArrayList<>();
+            }
         }
     }
     
@@ -616,7 +686,7 @@ public class DraftMatchService {
         // Check if draft match is now full
         Long approvedCount = draftMatchUserStatusRepository.countApprovedUsersByDraftMatchId(draftMatchId);
         if (approvedCount >= draftMatch.getSlotsNeeded()) {
-            draftMatch.setStatus("FULL");
+            draftMatch.setStatus(DraftMatchStatus.FULL);
             draftMatch = draftMatchRepository.save(draftMatch);
         }
         
@@ -763,7 +833,7 @@ public class DraftMatchService {
         }
         
         // Change status to CONVERTED
-        draftMatch.setStatus("CONVERTED");
+        draftMatch.setStatus(DraftMatchStatus.CONVERTED);
         draftMatch = draftMatchRepository.save(draftMatch);
         
         // Create response with booking information
@@ -1126,7 +1196,7 @@ public class DraftMatchService {
         }
         
         // Update status to cancelled
-        draftMatch.setStatus("CANCELLED");
+        draftMatch.setStatus(DraftMatchStatus.CANCELLED);
         draftMatchRepository.save(draftMatch);
         
         // Send notifications to interested users
@@ -1204,8 +1274,8 @@ public class DraftMatchService {
         draftMatchUserStatusRepository.delete(userStatus);
         
         // Update draft match status if it was full
-        if ("FULL".equals(draftMatch.getStatus())) {
-            draftMatch.setStatus("ACTIVE");
+        if (DraftMatchStatus.FULL.equals(draftMatch.getStatus())) {
+            draftMatch.setStatus(DraftMatchStatus.RECRUITING);
             draftMatch = draftMatchRepository.save(draftMatch);
         }
         
@@ -1240,7 +1310,7 @@ public class DraftMatchService {
         }
         
         // Update draft match status
-        draftMatch.setStatus("BOOKING_INITIATED");
+        draftMatch.setStatus(DraftMatchStatus.AWAITING_CONFIRMATION);
         draftMatch = draftMatchRepository.save(draftMatch);
         
         // Create booking response
@@ -1277,7 +1347,7 @@ public class DraftMatchService {
         }
         
         // Update draft match status
-        draftMatch.setStatus("CONVERTED");
+        draftMatch.setStatus(DraftMatchStatus.CONVERTED);
         draftMatch = draftMatchRepository.save(draftMatch);
         
         // Send notifications to all approved users
@@ -1400,5 +1470,23 @@ public class DraftMatchService {
         score += Math.random() * 10.0;
         
         return Math.min(score, 100.0);
+    }
+    
+    private List<DraftMatchDto> calculateCompatibilityScores(User user, List<DraftMatchDto> matchDtos, String sportType) {
+        try {
+            log.info("[COMPATIBILITY_CALCULATION] Calculating compatibility scores for {} draft matches", matchDtos.size());
+            
+            // Use AIRecommendationService to calculate compatibility scores
+            // This will set compatibility scores but won't sort by AI ranking
+            List<DraftMatchDto> matchesWithScores = aiRecommendationService.fallbackRankDraftMatches(user, matchDtos, sportType);
+            
+            log.info("[COMPATIBILITY_CALCULATION] Successfully calculated compatibility scores for {} draft matches", matchesWithScores.size());
+            return matchesWithScores;
+            
+        } catch (Exception e) {
+            log.error("[COMPATIBILITY_CALCULATION] Error calculating compatibility scores: {}", e.getMessage(), e);
+            // Return original matches without compatibility scores if calculation fails
+            return matchDtos;
+        }
     }
 }

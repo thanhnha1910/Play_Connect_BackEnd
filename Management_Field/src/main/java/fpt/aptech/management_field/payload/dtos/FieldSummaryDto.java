@@ -14,6 +14,8 @@ public class FieldSummaryDto {
     private String locationName;
     private Boolean isActive;
     private Integer hourlyRate;
+    private String thumbnailUrl;
+    private String imageGallery;
     
     // Explicit setters for compatibility
     public void setFieldId(Long fieldId) {
@@ -38,5 +40,13 @@ public class FieldSummaryDto {
     
     public void setHourlyRate(Integer hourlyRate) {
         this.hourlyRate = hourlyRate;
+    }
+    
+    public void setThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
+    }
+    
+    public void setImageGallery(String imageGallery) {
+        this.imageGallery = imageGallery;
     }
 }

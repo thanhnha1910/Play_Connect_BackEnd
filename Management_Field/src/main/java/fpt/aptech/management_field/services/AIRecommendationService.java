@@ -41,73 +41,11 @@ public class AIRecommendationService {
     }
     
     /**
-     * Rank open matches based on user's sport profile tags
+     * Rank open matches based on user's sport profile tags - SIMPLE VERSION
      */
-    public List<OpenMatchDto> rankOpenMatches(User user, List<OpenMatchDto> openMatches, String sportType) {
-        try {
-            // Extract user tags for the specific sport
-            List<String> userTags = extractUserTags(user, sportType);
-            
-            if (userTags.isEmpty()) {
-                logger.info("No tags found for user {} and sport {}, returning original order", user.getId(), sportType);
-                return openMatches;
-            }
-            
-            // Prepare request payload
-            Map<String, Object> requestPayload = new HashMap<>();
-            requestPayload.put("userTags", userTags);
-            requestPayload.put("openMatches", openMatches);
-            
-            // Call AI service
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestPayload, headers);
-            
-            String url = aiServiceBaseUrl + "/rank-matches";
-            logger.info("[MATCH_RANKING_DEBUG] Calling AI service at: {}", url);
-            logger.info("[MATCH_RANKING_DEBUG] Request payload: userTags={}, openMatches count={}", userTags, openMatches.size());
-            
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-            
-            logger.info("[MATCH_RANKING_DEBUG] AI service response status: {}", response.getStatusCode());
-            logger.info("[MATCH_RANKING_DEBUG] AI service response body: {}", response.getBody());
-            
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                List<Map<String, Object>> rankedMatches = (List<Map<String, Object>>) response.getBody().get("ranked_matches");
-                logger.info("[MATCH_RANKING_DEBUG] Extracted {} ranked matches from AI response", rankedMatches != null ? rankedMatches.size() : 0);
-                
-                // Log each match's compatibilityScore before conversion
-                if (rankedMatches != null) {
-                    for (int i = 0; i < rankedMatches.size(); i++) {
-                        Map<String, Object> match = rankedMatches.get(i);
-                        Object compatibilityScore = match.get("compatibilityScore");
-                        Object matchId = match.get("id");
-                        logger.info("[MATCH_RANKING_DEBUG] Match[{}] - ID: {}, compatibilityScore: {} (type: {})", 
-                                   i, matchId, compatibilityScore, 
-                                   compatibilityScore != null ? compatibilityScore.getClass().getSimpleName() : "null");
-                    }
-                }
-                
-                List<OpenMatchDto> convertedMatches = convertToOpenMatchDtos(rankedMatches);
-                
-                // Log each converted DTO's compatibilityScore
-                for (int i = 0; i < convertedMatches.size(); i++) {
-                    OpenMatchDto dto = convertedMatches.get(i);
-                    logger.info("[MATCH_RANKING_DEBUG] ConvertedDTO[{}] - ID: {}, compatibilityScore: {}", 
-                               i, dto.getId(), dto.getCompatibilityScore());
-                }
-                
-                return convertedMatches;
-            }
-            
-            logger.warn("AI service returned non-OK status: {}", response.getStatusCode());
-            return openMatches;
-            
-        } catch (Exception e) {
-            logger.error("Error calling AI service for match ranking: {}", e.getMessage(), e);
-            return openMatches; // Return original list on error
-        }
-    }
+
+    
+
     
     /**
      * Validate recommendation data before processing
@@ -147,6 +85,108 @@ public class AIRecommendationService {
                 .limit(3)
                 .map(this::convertUserToMap)
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * Fallback ranking for open matches when AI ranking service fails
+     * Uses simple tag-based compatibility scoring
+     */
+    public List<OpenMatchDto> fallbackRankOpenMatches(User currentUser, List<OpenMatchDto> matches, String sportType) {
+        try {
+            logger.info("[FALLBACK_RANKING] Using fallback ranking for {} matches, user: {}, sport: {}", 
+                       matches.size(), currentUser.getId(), sportType);
+            
+            if (matches == null || matches.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            // Extract user tags for the specific sport
+            List<String> userTags = extractUserTagsSimple(currentUser, sportType);
+            logger.info("[FALLBACK_RANKING] User tags: {}", userTags);
+            
+            // Calculate compatibility score for each match
+            for (OpenMatchDto match : matches) {
+                double compatibilityScore = calculateMatchCompatibilityScore(userTags, match);
+                match.setCompatibilityScore(compatibilityScore);
+                logger.info("[FALLBACK_RANKING] Match {} compatibility score: {}", match.getId(), compatibilityScore);
+            }
+            
+            // Sort matches by compatibility score (highest first)
+            List<OpenMatchDto> rankedMatches = matches.stream()
+                .sorted((m1, m2) -> Double.compare(
+                    m2.getCompatibilityScore() != null ? m2.getCompatibilityScore() : 0.0,
+                    m1.getCompatibilityScore() != null ? m1.getCompatibilityScore() : 0.0
+                ))
+                .collect(Collectors.toList());
+            
+            logger.info("[FALLBACK_RANKING] Successfully ranked {} matches using fallback method", rankedMatches.size());
+            return rankedMatches;
+            
+        } catch (Exception e) {
+            logger.error("[FALLBACK_RANKING] Error in fallback ranking: {}", e.getMessage(), e);
+            // Return original matches without scores if fallback fails
+            return matches;
+        }
+    }
+    
+    /**
+     * Calculate compatibility score between user tags and match requirements
+     */
+    private double calculateMatchCompatibilityScore(List<String> userTags, OpenMatchDto match) {
+        try {
+            List<String> matchTags = match.getRequiredTags();
+            if (matchTags == null || matchTags.isEmpty()) {
+                // If no specific requirements, give a moderate score
+                return 0.6;
+            }
+            
+            if (userTags == null || userTags.isEmpty()) {
+                // If user has no tags, give a low score
+                return 0.3;
+            }
+            
+            // Calculate tag overlap
+            Set<String> userTagsSet = userTags.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+            
+            Set<String> matchTagsSet = matchTags.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+            
+            // Find intersection
+            Set<String> intersection = new HashSet<>(userTagsSet);
+            intersection.retainAll(matchTagsSet);
+            
+            // Calculate compatibility score
+            double overlapRatio = (double) intersection.size() / Math.max(matchTagsSet.size(), 1);
+            
+            // Apply scoring logic:
+            // - High overlap (>= 0.7): 0.8-0.95
+            // - Medium overlap (0.3-0.7): 0.5-0.8
+            // - Low overlap (< 0.3): 0.2-0.5
+            double baseScore;
+            if (overlapRatio >= 0.7) {
+                baseScore = 0.8 + (overlapRatio - 0.7) * 0.5; // 0.8 to 0.95
+            } else if (overlapRatio >= 0.3) {
+                baseScore = 0.5 + (overlapRatio - 0.3) * 0.75; // 0.5 to 0.8
+            } else {
+                baseScore = 0.2 + overlapRatio * 1.0; // 0.2 to 0.5
+            }
+            
+            // Add some randomness to avoid identical scores
+            double randomFactor = 0.95 + (Math.random() * 0.1); // 0.95 to 1.05
+            double finalScore = Math.min(0.95, baseScore * randomFactor);
+            
+            logger.debug("[FALLBACK_RANKING] Match {} - User tags: {}, Match tags: {}, Overlap: {}/{}, Score: {}",
+                        match.getId(), userTagsSet, matchTagsSet, intersection.size(), matchTagsSet.size(), finalScore);
+            
+            return finalScore;
+            
+        } catch (Exception e) {
+            logger.error("[FALLBACK_RANKING] Error calculating compatibility for match {}: {}", match.getId(), e.getMessage());
+            return 0.5; // Default moderate score
+        }
     }
     
     /**
@@ -261,7 +301,211 @@ public class AIRecommendationService {
     }
     
     /**
-     * Extract tags from user's sport profile for a specific sport
+     * Extract user tags - SIMPLE VERSION
+     */
+    private List<String> extractUserTagsSimple(User user, String sportType) {
+        if (user == null || sportType == null) {
+            return new ArrayList<>();
+        }
+        
+        try {
+            if (user.getSportProfiles() == null || user.getSportProfiles().isEmpty()) {
+                logger.info("[RANKING] User {} has no sport profiles, using default tags", user.getId());
+                return getDefaultTagsForSport(sportType);
+            }
+            
+            Map<String, SportProfileDto> sportProfiles = objectMapper.readValue(
+                user.getSportProfiles(), 
+                new TypeReference<Map<String, SportProfileDto>>() {}
+            );
+            
+            SportProfileDto profile = sportProfiles.get(sportType);
+            if (profile != null && profile.getTags() != null && !profile.getTags().isEmpty()) {
+                logger.info("[RANKING] Found {} tags for user {} sport {}", 
+                           profile.getTags().size(), user.getId(), sportType);
+                return new ArrayList<>(profile.getTags());
+            }
+            
+            logger.info("[RANKING] No tags for sport {}, using default", sportType);
+            return getDefaultTagsForSport(sportType);
+            
+        } catch (Exception e) {
+            logger.error("[RANKING] Error extracting tags for user {}: {}", user.getId(), e.getMessage());
+            return getDefaultTagsForSport(sportType);
+        }
+    }
+    
+    /**
+     * Get default tags for a sport type
+     */
+    private List<String> getDefaultTagsForSport(String sportType) {
+        List<String> defaultTags = new ArrayList<>();
+        if ("FOOTBALL".equalsIgnoreCase(sportType)) {
+            defaultTags.addAll(Arrays.asList("beginner", "casual", "team-player"));
+        } else if ("BASKETBALL".equalsIgnoreCase(sportType)) {
+            defaultTags.addAll(Arrays.asList("beginner", "casual", "team-player"));
+        } else {
+            defaultTags.addAll(Arrays.asList("beginner", "casual"));
+        }
+        return defaultTags;
+    }
+    
+    /**
+     * Convert ranked matches from AI service - SIMPLE VERSION
+     */
+    private List<OpenMatchDto> convertRankedMatchesSimple(List<Map<String, Object>> rankedMatches) {
+        List<OpenMatchDto> result = new ArrayList<>();
+        
+        for (int i = 0; i < rankedMatches.size(); i++) {
+            Map<String, Object> matchData = rankedMatches.get(i);
+            try {
+                // Tạo DTO từ original match data
+                OpenMatchDto dto = new OpenMatchDto();
+                
+                // Set basic fields
+                setBasicFields(dto, matchData);
+                
+                // Set AI scores - ĐÂY LÀ PHẦN QUAN TRỌNG
+                setAIScores(dto, matchData, i + 1);
+                
+                result.add(dto);
+                
+            } catch (Exception e) {
+                logger.error("[RANKING] Error converting match {}: {}", i + 1, e.getMessage());
+            }
+        }
+        
+        logger.info("[RANKING] Converted {} matches successfully", result.size());
+        return result;
+    }
+    
+    /**
+     * Set basic fields for OpenMatchDto
+     */
+    private void setBasicFields(OpenMatchDto dto, Map<String, Object> matchData) {
+        if (matchData.get("id") instanceof Number) {
+            dto.setId(((Number) matchData.get("id")).longValue());
+        }
+        if (matchData.get("bookingId") instanceof Number) {
+            dto.setBookingId(((Number) matchData.get("bookingId")).longValue());
+        }
+        if (matchData.get("creatorUserId") instanceof Number) {
+            dto.setCreatorUserId(((Number) matchData.get("creatorUserId")).longValue());
+        }
+        if (matchData.get("creatorUserName") != null) {
+            dto.setCreatorUserName(matchData.get("creatorUserName").toString());
+        }
+        if (matchData.get("creatorAvatarUrl") != null) {
+            dto.setCreatorAvatarUrl(matchData.get("creatorAvatarUrl").toString());
+        }
+        if (matchData.get("sportType") != null) {
+            dto.setSportType(matchData.get("sportType").toString());
+        }
+        if (matchData.get("fieldName") != null) {
+            dto.setFieldName(matchData.get("fieldName").toString());
+        }
+        if (matchData.get("locationAddress") != null) {
+            dto.setLocationAddress(matchData.get("locationAddress").toString());
+        }
+        if (matchData.get("locationName") != null) {
+            dto.setLocationName(matchData.get("locationName").toString());
+        }
+        if (matchData.get("slotsNeeded") instanceof Number) {
+            dto.setSlotsNeeded(((Number) matchData.get("slotsNeeded")).intValue());
+        }
+        if (matchData.get("currentParticipants") instanceof Number) {
+            dto.setCurrentParticipants(((Number) matchData.get("currentParticipants")).intValue());
+        }
+        if (matchData.get("status") != null) {
+            dto.setStatus(matchData.get("status").toString());
+        }
+        
+        // Handle time fields - convert from String to Instant if needed
+        if (matchData.get("startTime") != null) {
+            Object startTimeObj = matchData.get("startTime");
+            if (startTimeObj instanceof String) {
+                try {
+                    dto.setStartTime(java.time.Instant.parse((String) startTimeObj));
+                } catch (Exception e) {
+                    logger.warn("[RANKING] Could not parse startTime: {}", startTimeObj);
+                }
+            }
+        }
+        
+        if (matchData.get("endTime") != null) {
+            Object endTimeObj = matchData.get("endTime");
+            if (endTimeObj instanceof String) {
+                try {
+                    dto.setEndTime(java.time.Instant.parse((String) endTimeObj));
+                } catch (Exception e) {
+                    logger.warn("[RANKING] Could not parse endTime: {}", endTimeObj);
+                }
+            }
+        }
+        
+        // Handle requiredTags
+        Object requiredTagsObj = matchData.get("requiredTags");
+        if (requiredTagsObj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<String> tagsList = (List<String>) requiredTagsObj;
+            dto.setRequiredTags(tagsList);
+        } else if (requiredTagsObj instanceof String) {
+            try {
+                List<String> tagsList = objectMapper.readValue((String) requiredTagsObj, new TypeReference<List<String>>() {});
+                dto.setRequiredTags(tagsList);
+            } catch (Exception e) {
+                dto.setRequiredTags(new ArrayList<>());
+            }
+        } else {
+            dto.setRequiredTags(new ArrayList<>());
+        }
+        
+        // Handle participantIds
+        Object participantIdsObj = matchData.get("participantIds");
+        if (participantIdsObj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Long> participantIds = (List<Long>) participantIdsObj;
+            dto.setParticipantIds(participantIds);
+        }
+        
+        // Set currentUserJoinStatus if available
+        if (matchData.get("currentUserJoinStatus") != null) {
+            dto.setCurrentUserJoinStatus(matchData.get("currentUserJoinStatus").toString());
+        }
+    }
+    
+    /**
+     * Set AI scores for OpenMatchDto - CRITICAL PART
+     */
+    private void setAIScores(OpenMatchDto dto, Map<String, Object> matchData, int matchIndex) {
+        // Set compatibilityScore
+        Object compatibilityScore = matchData.get("compatibilityScore");
+        if (compatibilityScore instanceof Number) {
+            double score = ((Number) compatibilityScore).doubleValue();
+            dto.setCompatibilityScore(score);
+            logger.info("[RANKING] Match {} (ID: {}) - compatibilityScore set to: {}", 
+                       matchIndex, dto.getId(), score);
+        } else {
+            logger.warn("[RANKING] Match {} - compatibilityScore not found or invalid: {}", 
+                       matchIndex, compatibilityScore);
+            dto.setCompatibilityScore(0.0);
+        }
+        
+        // Set explicitScore if available
+        Object explicitScore = matchData.get("explicitScore");
+        if (explicitScore instanceof Number) {
+            dto.setExplicitScore(((Number) explicitScore).doubleValue());
+        }
+        
+        // Set implicitScore if available
+        Object implicitScore = matchData.get("implicitScore");
+        if (implicitScore instanceof Number) {
+            dto.setImplicitScore(((Number) implicitScore).doubleValue());
+        }
+    }
+    
+    /**
+     * Extract tags from user's sport profile for a specific sport - LEGACY METHOD
      */
     private List<String> extractUserTags(User user, String sportType) {
         try {
@@ -303,74 +547,7 @@ public class AIRecommendationService {
     /**
      * Convert AI service response back to OpenMatchDto list
      */
-    private List<OpenMatchDto> convertToOpenMatchDtos(List<Map<String, Object>> rankedMatches) {
-        List<OpenMatchDto> result = new ArrayList<>();
-        
-        logger.info("[PHASE2_AUDIT_CONVERSION] Starting conversion of {} matches to DTOs", rankedMatches != null ? rankedMatches.size() : 0);
-        
-        for (int index = 0; index < rankedMatches.size(); index++) {
-            Map<String, Object> matchData = rankedMatches.get(index);
-            try {
-                logger.info("[PHASE2_AUDIT_CONVERSION] Converting match {}: Raw data keys: {}", index + 1, matchData.keySet());
-                logger.info("[PHASE2_AUDIT_CONVERSION] Match {} raw compatibilityScore: {} (type: {})", 
-                    index + 1, matchData.get("compatibilityScore"), 
-                    matchData.get("compatibilityScore") != null ? matchData.get("compatibilityScore").getClass().getSimpleName() : "null");
-                
-                OpenMatchDto dto = objectMapper.convertValue(matchData, OpenMatchDto.class);
-                
-                logger.info("[PHASE2_AUDIT_CONVERSION] Match {} after ObjectMapper conversion: DTO.compatibilityScore = {}", 
-                    index + 1, dto.getCompatibilityScore());
-                
-                // Ensure compatibilityScore is properly set from AI service response
-                if (matchData.containsKey("compatibilityScore")) {
-                    Object scoreObj = matchData.get("compatibilityScore");
-                    if (scoreObj instanceof Number) {
-                        double scoreValue = ((Number) scoreObj).doubleValue();
-                        dto.setCompatibilityScore(scoreValue);
-                        logger.info("[PHASE2_AUDIT_CONVERSION] CRITICAL FIX: Explicitly set compatibilityScore {} for match {} (ID: {})", 
-                            scoreValue, index + 1, dto.getId());
-                    } else {
-                        logger.warn("[PHASE2_AUDIT_CONVERSION] WARNING: compatibilityScore is not a Number for match {}: {} (type: {})", 
-                            index + 1, scoreObj, scoreObj != null ? scoreObj.getClass().getSimpleName() : "null");
-                    }
-                } else {
-                    logger.warn("[PHASE2_AUDIT_CONVERSION] WARNING: No compatibilityScore key found in match {} data", index + 1);
-                }
-                
-                // Set explicitScore from AI service response
-                if (matchData.containsKey("explicitScore")) {
-                    Object scoreObj = matchData.get("explicitScore");
-                    if (scoreObj instanceof Number) {
-                        double scoreValue = ((Number) scoreObj).doubleValue();
-                        dto.setExplicitScore(scoreValue);
-                        logger.info("[PHASE2_AUDIT_CONVERSION] Set explicitScore {} for match {} (ID: {})", 
-                            scoreValue, index + 1, dto.getId());
-                    }
-                }
-                
-                // Set implicitScore from AI service response
-                if (matchData.containsKey("implicitScore")) {
-                    Object scoreObj = matchData.get("implicitScore");
-                    if (scoreObj instanceof Number) {
-                        double scoreValue = ((Number) scoreObj).doubleValue();
-                        dto.setImplicitScore(scoreValue);
-                        logger.info("[PHASE2_AUDIT_CONVERSION] Set implicitScore {} for match {} (ID: {})", 
-                            scoreValue, index + 1, dto.getId());
-                    }
-                }
-                
-                logger.info("[PHASE2_AUDIT_CONVERSION] Match {} final DTO.compatibilityScore = {}", 
-                    index + 1, dto.getCompatibilityScore());
-                
-                result.add(dto);
-            } catch (Exception e) {
-                logger.error("[PHASE2_AUDIT_CONVERSION] Error converting match {} data to DTO: {}", index + 1, e.getMessage(), e);
-            }
-        }
-        
-        logger.info("[PHASE2_AUDIT_CONVERSION] Conversion completed. Result size: {}", result.size());
-        return result;
-    }
+
     
     /**
      * Convert User entities to maps for AI service
@@ -478,78 +655,7 @@ public class AIRecommendationService {
     /**
      * Rank open matches using hybrid scoring model
      */
-    public List<OpenMatchDto> rankOpenMatchesHybrid(User user, List<OpenMatchDto> openMatches, String sportType) {
-        try {
-            // Extract user data for hybrid format
-            Map<String, Object> currentUser = createCurrentUserData(user, sportType);
-            
-            // Prepare hybrid format payload
-            Map<String, Object> requestPayload = new HashMap<>();
-            requestPayload.put("currentUser", currentUser);
-            requestPayload.put("openMatches", openMatches);
-            
-            // Log the hybrid payload
-            try {
-                String payloadJson = objectMapper.writeValueAsString(requestPayload);
-                logger.info("[HYBRID_AI_AUDIT] Sending hybrid match ranking request:");
-                logger.info("[HYBRID_AI_AUDIT] User ID: {}, Sport: {}", user.getId(), sportType);
-                logger.info("[HYBRID_AI_AUDIT] Payload: {}", payloadJson);
-            } catch (Exception logEx) {
-                logger.error("[HYBRID_AI_AUDIT] Failed to serialize hybrid payload: {}", logEx.getMessage());
-            }
-            
-            // Call AI service
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestPayload, headers);
-            
-            String url = aiServiceBaseUrl + "/api/v1/recommend/matches-ranking";
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-            
-            // PHASE 2 AUDIT - BREAKPOINT A: Inspect raw JSON response from Python service
-            logger.info("[PHASE2_AUDIT_BREAKPOINT_A] Raw response from Python AI service:");
-            logger.info("[PHASE2_AUDIT_BREAKPOINT_A] Status Code: {}", response.getStatusCode());
-            logger.info("[PHASE2_AUDIT_BREAKPOINT_A] Response Body: {}", response.getBody());
-            
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                List<Map<String, Object>> rankedMatches = (List<Map<String, Object>>) response.getBody().get("ranked_matches");
-                logger.info("[HYBRID_AI_AUDIT] Successfully received {} hybrid ranked matches", rankedMatches != null ? rankedMatches.size() : 0);
-                
-                // PHASE 2 AUDIT - Inspect rankedMatches from Python before conversion
-                if (rankedMatches != null && !rankedMatches.isEmpty()) {
-                    logger.info("[PHASE2_AUDIT_BREAKPOINT_A] Inspecting top 3 matches from Python response:");
-                    for (int i = 0; i < Math.min(3, rankedMatches.size()); i++) {
-                        Map<String, Object> match = rankedMatches.get(i);
-                        logger.info("[PHASE2_AUDIT_BREAKPOINT_A] Match {}: ID={}, compatibilityScore={}", 
-                            i+1, match.get("id"), match.get("compatibilityScore"));
-                    }
-                }
-                
-                List<OpenMatchDto> finalResult = convertToOpenMatchDtos(rankedMatches);
-                
-                // PHASE 2 AUDIT - BREAKPOINT B: Inspect final OpenMatchDto list before return
-                logger.info("[PHASE2_AUDIT_BREAKPOINT_B] Final List<OpenMatchDto> before return:");
-                logger.info("[PHASE2_AUDIT_BREAKPOINT_B] Total DTOs: {}", finalResult != null ? finalResult.size() : 0);
-                if (finalResult != null && !finalResult.isEmpty()) {
-                    logger.info("[PHASE2_AUDIT_BREAKPOINT_B] Inspecting top 3 OpenMatchDto objects:");
-                    for (int i = 0; i < Math.min(3, finalResult.size()); i++) {
-                        OpenMatchDto dto = finalResult.get(i);
-                        logger.info("[PHASE2_AUDIT_BREAKPOINT_B] DTO {}: ID={}, compatibilityScore={}", 
-                            i+1, dto.getId(), dto.getCompatibilityScore());
-                    }
-                }
-                
-                return finalResult;
-            }
-            
-            logger.error("[HYBRID_AI_AUDIT] AI service returned non-OK status: {}", response.getStatusCode());
-            return openMatches;
-            
-        } catch (Exception e) {
-            logger.error("[HYBRID_AI_AUDIT] Exception in hybrid match ranking: {}", e.getMessage(), e);
-            return openMatches;
-        }
-    }
+
     
     /**
      * Create hybrid format payload for teammate recommendations
@@ -849,214 +955,105 @@ public class AIRecommendationService {
     }
     
     /**
-     * Generic method to enrich any list of matches with AI compatibility scores
-     * This method centralizes AI service calls to avoid code duplication
-     * 
-     * @param matches List of matches (OpenMatchDto or DraftMatchDto)
-     * @param currentUser User requesting the matches
-     * @param sportType Sport type for AI scoring
-     * @param <T> Generic type extending from base match DTO
-     * @return Enriched list with AI compatibility scores
+     * Fallback ranking for draft matches when AI ranking service fails
+     * Uses simple tag-based compatibility scoring
      */
-    public <T> List<T> enrichMatchesWithAiScores(List<T> matches, User currentUser, String sportType) {
-        // Return original list if no matches or user
-        if (matches == null || matches.isEmpty() || currentUser == null || sportType == null) {
-            logger.info("[AI_ENRICHMENT] Skipping AI enrichment - matches: {}, user: {}, sport: {}", 
-                       matches != null ? matches.size() : 0, 
-                       currentUser != null ? currentUser.getId() : "null", 
-                       sportType);
-            return matches;
-        }
-        
+    public List<DraftMatchDto> fallbackRankDraftMatches(User currentUser, List<DraftMatchDto> matches, String sportType) {
         try {
-            // Check if AI service is available
-            if (!isAIServiceAvailable()) {
-                logger.warn("[AI_ENRICHMENT] AI service not available, returning original matches");
-                return matches;
-            }
-            
-            logger.info("[AI_ENRICHMENT] Starting AI enrichment for {} matches, user: {}, sport: {}", 
+            logger.info("[FALLBACK_RANKING] Using fallback ranking for {} draft matches, user: {}, sport: {}", 
                        matches.size(), currentUser.getId(), sportType);
             
-            // For OpenMatchDto, use existing hybrid ranking
-            if (!matches.isEmpty() && matches.get(0) instanceof OpenMatchDto) {
-                @SuppressWarnings("unchecked")
-                List<OpenMatchDto> openMatches = (List<OpenMatchDto>) matches;
-                List<OpenMatchDto> enrichedMatches = rankOpenMatchesHybrid(currentUser, openMatches, sportType);
-                
-                logger.info("[AI_ENRICHMENT] Successfully enriched {} OpenMatch DTOs", enrichedMatches.size());
-                @SuppressWarnings("unchecked")
-                List<T> result = (List<T>) enrichedMatches;
-                return result;
+            if (matches == null || matches.isEmpty()) {
+                return new ArrayList<>();
             }
             
-            // For other types (like DraftMatchDto), we can extend this logic later
-            // For now, return original matches
-            logger.info("[AI_ENRICHMENT] Match type not supported for AI enrichment yet: {}", 
-                       matches.get(0).getClass().getSimpleName());
-            return matches;
+            // Extract user tags for the specific sport
+            List<String> userTags = extractUserTagsSimple(currentUser, sportType);
+            logger.info("[FALLBACK_RANKING] User tags: {}", userTags);
+            
+            // Calculate compatibility score for each draft match
+            for (DraftMatchDto match : matches) {
+                double compatibilityScore = calculateDraftMatchCompatibilityScore(userTags, match);
+                match.setCompatibilityScore(compatibilityScore);
+                logger.info("[FALLBACK_RANKING] Draft Match {} compatibility score: {}", match.getId(), compatibilityScore);
+            }
+            
+            // Sort matches by compatibility score (highest first)
+            List<DraftMatchDto> rankedMatches = matches.stream()
+                .sorted((m1, m2) -> Double.compare(
+                    m2.getCompatibilityScore() != null ? m2.getCompatibilityScore() : 0.0,
+                    m1.getCompatibilityScore() != null ? m1.getCompatibilityScore() : 0.0
+                ))
+                .collect(Collectors.toList());
+            
+            logger.info("[FALLBACK_RANKING] Successfully ranked {} draft matches using fallback method", rankedMatches.size());
+            return rankedMatches;
             
         } catch (Exception e) {
-            logger.error("[AI_ENRICHMENT] Error during AI enrichment: {}", e.getMessage(), e);
-            // Return original matches on error
+            logger.error("[FALLBACK_RANKING] Error in fallback ranking for draft matches: {}", e.getMessage(), e);
+            // Return original matches without scores if fallback fails
             return matches;
         }
     }
     
     /**
-     * Specialized method for enriching DraftMatchDto with AI scores
-     * This method handles the specific requirements for draft matches
-     * 
-     * @param draftMatches List of DraftMatchDto
-     * @param currentUser User requesting the matches
-     * @param sportType Sport type for AI scoring
-     * @return Enriched list with AI compatibility scores
+     * Calculate compatibility score between user tags and draft match requirements
      */
-    public List<fpt.aptech.management_field.payload.dtos.DraftMatchDto> enrichDraftMatchesWithAiScores(
-            List<fpt.aptech.management_field.payload.dtos.DraftMatchDto> draftMatches, 
-            User currentUser, 
-            String sportType) {
-        
-        // Return original list if no matches or user
-        if (draftMatches == null || draftMatches.isEmpty() || currentUser == null || sportType == null) {
-            logger.info("[AI_ENRICHMENT_DRAFT] Skipping AI enrichment - matches: {}, user: {}, sport: {}", 
-                       draftMatches != null ? draftMatches.size() : 0, 
-                       currentUser != null ? currentUser.getId() : "null", 
-                       sportType);
-            return draftMatches;
-        }
-        
+    private double calculateDraftMatchCompatibilityScore(List<String> userTags, DraftMatchDto match) {
         try {
-            // Check if AI service is available
-            if (!isAIServiceAvailable()) {
-                logger.warn("[AI_ENRICHMENT_DRAFT] AI service not available, returning original matches");
-                return draftMatches;
+            List<String> matchTags = match.getRequiredTags();
+            if (matchTags == null || matchTags.isEmpty()) {
+                // If no specific requirements, give a moderate score
+                return 0.65;
             }
             
-            logger.info("[AI_ENRICHMENT_DRAFT] Starting AI enrichment for {} draft matches, user: {}, sport: {}", 
-                       draftMatches.size(), currentUser.getId(), sportType);
-            
-            // Extract user data for hybrid format
-            Map<String, Object> currentUserData = createCurrentUserData(currentUser, sportType);
-            
-            // Prepare hybrid format payload
-            Map<String, Object> requestPayload = new HashMap<>();
-            requestPayload.put("currentUser", currentUserData);
-            requestPayload.put("openMatches", draftMatches); // AI service expects 'openMatches' key
-            
-            // Log the hybrid payload
-            try {
-                String payloadJson = objectMapper.writeValueAsString(requestPayload);
-                logger.info("[AI_ENRICHMENT_DRAFT] Sending draft match ranking request:");
-                logger.info("[AI_ENRICHMENT_DRAFT] User ID: {}, Sport: {}", currentUser.getId(), sportType);
-                logger.info("[AI_ENRICHMENT_DRAFT] Payload: {}", payloadJson);
-            } catch (Exception logEx) {
-                logger.error("[AI_ENRICHMENT_DRAFT] Failed to serialize payload: {}", logEx.getMessage());
+            if (userTags == null || userTags.isEmpty()) {
+                // If user has no tags, give a low score
+                return 0.35;
             }
             
-            // Call AI service
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestPayload, headers);
+            // Calculate tag overlap
+            Set<String> userTagsSet = userTags.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
             
-            String url = aiServiceBaseUrl + "/api/v1/recommend/matches-ranking";
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+            Set<String> matchTagsSet = matchTags.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
             
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                List<Map<String, Object>> rankedMatches = (List<Map<String, Object>>) response.getBody().get("rankedMatches");
-                logger.info("[AI_ENRICHMENT_DRAFT] Successfully received {} ranked draft matches", 
-                           rankedMatches != null ? rankedMatches.size() : 0);
-                
-                if (rankedMatches != null && !rankedMatches.isEmpty()) {
-                    // Convert AI response back to DraftMatchDto list
-                    List<fpt.aptech.management_field.payload.dtos.DraftMatchDto> enrichedMatches = 
-                        convertMapsToDraftMatchDtos(rankedMatches, draftMatches);
-                    
-                    // TODO: Save AI scores to database
-                    // saveDraftMatchAiScoresToDatabase(enrichedMatches);
-                    
-                    logger.info("[AI_ENRICHMENT_DRAFT] Successfully enriched {} DraftMatch DTOs", enrichedMatches.size());
-                    return enrichedMatches;
-                }
+            // Find intersection
+            Set<String> intersection = new HashSet<>(userTagsSet);
+            intersection.retainAll(matchTagsSet);
+            
+            // Calculate compatibility score
+            double overlapRatio = (double) intersection.size() / Math.max(matchTagsSet.size(), 1);
+            
+            // Apply scoring logic for draft matches (slightly different from open matches):
+            // - High overlap (>= 0.7): 0.75-0.9
+            // - Medium overlap (0.3-0.7): 0.45-0.75
+            // - Low overlap (< 0.3): 0.25-0.45
+            double baseScore;
+            if (overlapRatio >= 0.7) {
+                baseScore = 0.75 + (overlapRatio - 0.7) * 0.5; // 0.75 to 0.9
+            } else if (overlapRatio >= 0.3) {
+                baseScore = 0.45 + (overlapRatio - 0.3) * 0.75; // 0.45 to 0.75
+            } else {
+                baseScore = 0.25 + overlapRatio * 0.67; // 0.25 to 0.45
             }
             
-            logger.warn("[AI_ENRICHMENT_DRAFT] AI service returned non-OK status or empty response: {}", 
-                       response.getStatusCode());
-            return draftMatches;
+            // Add some randomness to avoid identical scores
+            double randomFactor = 0.95 + (Math.random() * 0.1); // 0.95 to 1.05
+            double finalScore = Math.min(0.9, baseScore * randomFactor);
+            
+            logger.debug("[FALLBACK_RANKING] Draft Match {} - User tags: {}, Match tags: {}, Overlap: {}/{}, Score: {}",
+                        match.getId(), userTagsSet, matchTagsSet, intersection.size(), matchTagsSet.size(), finalScore);
+            
+            return finalScore;
             
         } catch (Exception e) {
-            logger.error("[AI_ENRICHMENT_DRAFT] Error during AI enrichment: {}", e.getMessage(), e);
-            // Return original matches on error
-            return draftMatches;
+            logger.error("[FALLBACK_RANKING] Error calculating compatibility for draft match {}: {}", match.getId(), e.getMessage());
+            return 0.5; // Default moderate score
         }
     }
     
-    /**
-     * Helper method to convert AI service response back to DraftMatchDto list
-     */
-    private List<fpt.aptech.management_field.payload.dtos.DraftMatchDto> convertMapsToDraftMatchDtos(
-            List<Map<String, Object>> rankedMatches, 
-            List<fpt.aptech.management_field.payload.dtos.DraftMatchDto> originalDtos) {
-        
-        if (rankedMatches == null) {
-            return originalDtos;
-        }
-        
-        List<fpt.aptech.management_field.payload.dtos.DraftMatchDto> result = new ArrayList<>();
-        
-        for (Map<String, Object> matchData : rankedMatches) {
-            try {
-                Long matchId = ((Number) matchData.get("id")).longValue();
-                
-                // Find the original DTO
-                fpt.aptech.management_field.payload.dtos.DraftMatchDto originalDto = originalDtos.stream()
-                        .filter(dto -> dto.getId().equals(matchId))
-                        .findFirst()
-                        .orElse(null);
-                
-                if (originalDto != null) {
-                    // Set AI scores from response
-                    if (matchData.containsKey("compatibilityScore")) {
-                        Object scoreObj = matchData.get("compatibilityScore");
-                        if (scoreObj instanceof Number) {
-                            double scoreValue = ((Number) scoreObj).doubleValue();
-                            originalDto.setCompatibilityScore(scoreValue);
-                            logger.debug("[AI_ENRICHMENT_DRAFT] Set compatibilityScore {} for draft match {}", 
-                                        scoreValue, matchId);
-                        }
-                    }
-                    
-                    if (matchData.containsKey("explicitScore")) {
-                        Object scoreObj = matchData.get("explicitScore");
-                        if (scoreObj instanceof Number) {
-                            double scoreValue = ((Number) scoreObj).doubleValue();
-                            originalDto.setExplicitScore(scoreValue);
-                            logger.debug("[AI_ENRICHMENT_DRAFT] Set explicitScore {} for draft match {}", 
-                                        scoreValue, matchId);
-                        }
-                    }
-                    
-                    if (matchData.containsKey("implicitScore")) {
-                        Object scoreObj = matchData.get("implicitScore");
-                        if (scoreObj instanceof Number) {
-                            double scoreValue = ((Number) scoreObj).doubleValue();
-                            originalDto.setImplicitScore(scoreValue);
-                            logger.debug("[AI_ENRICHMENT_DRAFT] Set implicitScore {} for draft match {}", 
-                                        scoreValue, matchId);
-                        }
-                    }
-                    
-                    result.add(originalDto);
-                } else {
-                    logger.warn("[AI_ENRICHMENT_DRAFT] Could not find original DTO for match ID: {}", matchId);
-                }
-                
-            } catch (Exception e) {
-                logger.error("[AI_ENRICHMENT_DRAFT] Error processing match data: {}", e.getMessage(), e);
-            }
-        }
-        
-        logger.info("[AI_ENRICHMENT_DRAFT] Conversion completed. Result size: {}", result.size());
-        return result;
-    }
 }

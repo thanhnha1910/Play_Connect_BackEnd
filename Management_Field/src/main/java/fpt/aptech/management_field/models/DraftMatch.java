@@ -44,8 +44,9 @@ public class DraftMatch {
     @Column(name = "skill_level", columnDefinition = "NVARCHAR(50)")
     private String skillLevel; // BEGINNER, INTERMEDIATE, ADVANCED, EXPERT, ANY
     
-    @Column(name = "status", columnDefinition = "NVARCHAR(MAX)")
-    private String status; // RECRUITING, FULL, AWAITING_CONFIRMATION, CONVERTED_TO_MATCH, CANCELLED
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", columnDefinition = "NVARCHAR(50)")
+    private DraftMatchStatus status; // RECRUITING, FULL, AWAITING_CONFIRMATION, CONVERTED_TO_MATCH, CANCELLED
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -64,7 +65,7 @@ public class DraftMatch {
             createdAt = LocalDateTime.now();
         }
         if (status == null) {
-            status = "RECRUITING";
+            status = DraftMatchStatus.RECRUITING;
         }
     }
     
@@ -77,11 +78,11 @@ public class DraftMatch {
         this.creator = creator;
     }
     
-    public String getStatus() {
+    public DraftMatchStatus getStatus() {
         return status;
     }
     
-    public void setStatus(String status) {
+    public void setStatus(DraftMatchStatus status) {
         this.status = status;
     }
     
