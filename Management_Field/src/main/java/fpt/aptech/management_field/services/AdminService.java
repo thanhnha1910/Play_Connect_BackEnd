@@ -1,22 +1,9 @@
 package fpt.aptech.management_field.services;
 
-import fpt.aptech.management_field.models.ERole;
-import fpt.aptech.management_field.models.Location;
-import fpt.aptech.management_field.models.Owner;
-import fpt.aptech.management_field.models.User;
-import fpt.aptech.management_field.models.UserStatus;
-import fpt.aptech.management_field.payload.dtos.OwnerAnalyticsDto;
-import fpt.aptech.management_field.payload.dtos.OwnerSummaryDto;
-import fpt.aptech.management_field.payload.dtos.PendingOwnerDto;
-import fpt.aptech.management_field.payload.dtos.RecentActivityDto;
-import fpt.aptech.management_field.payload.dtos.UserSummaryDto;
-import fpt.aptech.management_field.payload.dtos.DetailedAnalyticsDto;
+import fpt.aptech.management_field.models.*;
+import fpt.aptech.management_field.payload.dtos.*;
 import fpt.aptech.management_field.payload.response.AdminStatsResponse;
-import fpt.aptech.management_field.repositories.BookingRepository;
-import fpt.aptech.management_field.repositories.FieldRepository;
-import fpt.aptech.management_field.repositories.LocationRepository;
-import fpt.aptech.management_field.repositories.OwnerRepository;
-import fpt.aptech.management_field.repositories.UserRepository;
+import fpt.aptech.management_field.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class AdminService {
@@ -54,11 +42,123 @@ public class AdminService {
     
     @Autowired
     private OwnerRepository ownerRepository;
+    @Autowired
+    private AdminRevenueRepository adminRevenueRepository;
 
+    @Autowired
+    private PaymentRepository paymentRepository;
     public List<User> getPendingOwners() {
         return userRepository.findByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
     }
-    
+    public AdminStatsResponse getDashboardStats() {
+        // Existing stats
+        long pendingOwnersCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
+        long totalUsersCount = userRepository.count();
+        long activeOwnersCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.ACTIVE);
+        long suspendedUsersCount = userRepository.countByStatus(UserStatus.SUSPENDED);
+        long totalFieldsCount = fieldRepository.count();
+
+        // Revenue stats (last 30 days)
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minus(30, ChronoUnit.DAYS);
+        LocalDateTime now = LocalDateTime.now();
+
+        Long totalCommission = adminRevenueRepository.getTotalCommissionByDateRange(thirtyDaysAgo, now);
+        Long totalRevenue = adminRevenueRepository.getTotalRevenueByDateRange(thirtyDaysAgo, now);
+        Long recentBookingsCount = adminRevenueRepository.getBookingCountByDateRange(thirtyDaysAgo, now);
+
+        return AdminStatsResponse.builder()
+                .totalUsers(totalUsersCount)
+                .activeOwners(activeOwnersCount)
+                .pendingOwners(pendingOwnersCount)
+                .suspendedUsers(suspendedUsersCount)
+                .totalFields(totalFieldsCount)
+                .recentBookings(recentBookingsCount != null ? recentBookingsCount : 0)
+                .totalCommission(totalCommission != null ? totalCommission : 0)
+                .totalRevenue(totalRevenue != null ? totalRevenue : 0)
+                .build();
+    }
+    public AdminAnalyticsDto getDetailedAnalytics(LocalDate startDate, LocalDate endDate) {
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(23, 59, 59);
+
+        // Daily revenue data
+        List<Object[]> dailyData = adminRevenueRepository.getDailyRevenueData(start, end);
+        List<AdminAnalyticsDto.DailyRevenueData> revenueData = dailyData.stream()
+                .map(row -> {
+                    long revenue = ((Number) row[2]).longValue();
+                    long bookings = ((Number) row[3]).longValue();
+                    double averageValue = bookings > 0 ? (double) revenue / bookings : 0.0;
+                    return new AdminAnalyticsDto.DailyRevenueData(
+                            row[0].toString(), // date
+                            ((Number) row[1]).longValue(), // commission
+                            revenue, // revenue
+                            bookings, // bookings
+                            averageValue // averageValue
+                    );
+                })
+                .collect(Collectors.toList());
+
+        // Top performing fields
+        List<Object[]> topFieldsData = adminRevenueRepository.getTopPerformingFields(start, end);
+        List<AdminAnalyticsDto.TopField> topFields = topFieldsData.stream()
+                .limit(10)
+                .map(row -> new AdminAnalyticsDto.TopField(
+                        (String) row[0], // name
+                        ((Number) row[1]).longValue(), // bookings
+                        ((Number) row[2]).longValue(), // commission
+                        0L, // revenue (default to 0, or calculate if available)
+                        "Unknown" // location (default, or fetch from repository if possible)
+                ))
+                .collect(Collectors.toList());
+
+        // Hourly booking data
+        List<Object[]> hourlyData = adminRevenueRepository.getHourlyBookingData(start, end);
+        List<AdminAnalyticsDto.HourlyData> hourlyBookings = hourlyData.stream()
+                .map(row -> new AdminAnalyticsDto.HourlyData(
+                        ((Number) row[0]).intValue(), // hour
+                        ((Number) row[1]).longValue(), // bookings
+                        0L, // revenue (default to 0, or calculate if available)
+                        formatTimeLabel(((Number) row[0]).intValue()) // timeLabel
+                ))
+                .collect(Collectors.toList());
+
+        // Revenue by location
+        List<Object[]> locationData = adminRevenueRepository.getRevenueByLocation(start, end);
+        List<AdminAnalyticsDto.LocationRevenue> locationRevenues = locationData.stream()
+                .map(row -> new AdminAnalyticsDto.LocationRevenue(
+                        (String) row[0], // locationName
+                        ((Number) row[1]).longValue(), // bookings
+                        ((Number) row[2]).longValue(), // commission
+                        0L, // revenue (default to 0, or calculate if available)
+                        0 // fieldsCount (default to 0, or fetch from repository if possible)
+                ))
+                .collect(Collectors.toList());
+
+        // Summary stats
+        Long totalCommission = adminRevenueRepository.getTotalCommissionByDateRange(start, end);
+        Long totalRevenue = adminRevenueRepository.getTotalRevenueByDateRange(start, end);
+        Long totalBookings = adminRevenueRepository.getBookingCountByDateRange(start, end);
+
+        return AdminAnalyticsDto.builder()
+                .dailyRevenueData(revenueData)
+                .topFields(topFields)
+                .hourlyBookings(hourlyBookings)
+                .locationRevenues(locationRevenues)
+                .totalCommission(totalCommission != null ? totalCommission : 0)
+                .totalRevenue(totalRevenue != null ? totalRevenue : 0)
+                .totalBookings(totalBookings != null ? totalBookings : 0)
+                .averageBookingValue(totalBookings != null && totalBookings > 0 ?
+                        (totalRevenue != null ? totalRevenue : 0) / totalBookings : 0)
+                .build();
+    }
+    private String formatTimeLabel(int hour) {
+        String period = hour < 12 ? "AM" : "PM";
+        int displayHour = hour == 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return String.format("%02d:00 %s", displayHour, period);
+    }
+    public List<AdminRevenue> getRecentTransactions() {
+        return adminRevenueRepository.findTop10ByOrderByCreatedAtDesc();
+    }
     public List<PendingOwnerDto> getPendingOwnerRequests() {
         List<User> pendingUsers = userRepository.findByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
         
@@ -174,37 +274,7 @@ public class AdminService {
         return savedUser;
     }
 
-    public AdminStatsResponse getDashboardStats() {
-        // Count pending owners
-        long pendingOwnersCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.PENDING_APPROVAL);
-        
-        // Count total users
-        long totalUsersCount = userRepository.count();
-        
-        // Count active owners
-        long activeOwnersCount = userRepository.countByRoles_NameAndStatus(ERole.ROLE_OWNER, UserStatus.ACTIVE);
-        
-        // Count suspended users
-        long suspendedUsersCount = userRepository.countByStatus(UserStatus.SUSPENDED);
-        
-        // Count total fields
-        long totalFieldsCount = fieldRepository.count();
-        
-        // Count successful bookings in last 30 days
-        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minus(30, ChronoUnit.DAYS);
-        long recentBookingsCount = bookingRepository.findAll().stream()
-                .filter(booking -> booking.getCreatedAt() != null && booking.getCreatedAt().isAfter(thirtyDaysAgo))
-                .count();
-        
-        return new AdminStatsResponse(
-            totalUsersCount,
-            activeOwnersCount,
-            pendingOwnersCount,
-            suspendedUsersCount,
-            totalFieldsCount,
-            recentBookingsCount
-        );
-    }
+
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
@@ -368,21 +438,7 @@ public class AdminService {
      }
      
      // Analytics Methods
-     public DetailedAnalyticsDto getDetailedAnalytics(LocalDate startDate, LocalDate endDate) {
-         // User Growth Data
-         List<DetailedAnalyticsDto.TimeSeriesData> userGrowth = generateUserGrowthData(startDate, endDate);
-         
-         // Revenue Trend Data (based on bookings)
-         List<DetailedAnalyticsDto.TimeSeriesData> revenueTrend = generateRevenueTrendData(startDate, endDate);
-         
-         // Top Performing Fields
-         List<DetailedAnalyticsDto.TopPerformingItem> topFields = generateTopFieldsData(startDate, endDate);
-         
-         // Booking Statistics
-         DetailedAnalyticsDto.BookingStats bookingStats = generateBookingStats(startDate, endDate);
-         
-         return new DetailedAnalyticsDto(userGrowth, revenueTrend, topFields, bookingStats);
-     }
+
      
      private List<DetailedAnalyticsDto.TimeSeriesData> generateUserGrowthData(LocalDate startDate, LocalDate endDate) {
          List<DetailedAnalyticsDto.TimeSeriesData> data = new java.util.ArrayList<>();

@@ -36,4 +36,26 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.user.id = :userId AND b.status = :status")
     int countByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);
+    @Query("SELECT b.status, COUNT(b) FROM Booking b WHERE b.createdAt >= :startDate AND b.createdAt <= :endDate GROUP BY b.status")
+    List<Object[]> getBookingStatusStats(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = :status AND b.createdAt >= :startDate AND b.createdAt <= :endDate")
+    Long getBookingCountByStatus(@Param("status") String status, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT b.field.fieldId, b.field.name, COUNT(b) as bookingCount " +
+            "FROM Booking b WHERE b.status = 'confirmed' AND b.createdAt >= :startDate AND b.createdAt <= :endDate " +
+            "GROUP BY b.field.fieldId, b.field.name ORDER BY COUNT(b) DESC")
+    List<Object[]> getTopBookedFields(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT EXTRACT(HOUR FROM b.fromTime) as hour, COUNT(b) " +
+            "FROM Booking b WHERE b.status = 'confirmed' AND b.createdAt >= :startDate AND b.createdAt <= :endDate " +
+            "GROUP BY EXTRACT(HOUR FROM b.fromTime) ORDER BY EXTRACT(HOUR FROM b.fromTime)")
+    List<Object[]> getBookingsByHour(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT DATE(b.createdAt) as date, COUNT(b) as count " +
+            "FROM Booking b WHERE b.createdAt >= :startDate AND b.createdAt <= :endDate " +
+            "GROUP BY DATE(b.createdAt) ORDER BY DATE(b.createdAt)")
+    List<Object[]> getDailyBookingCounts(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    // A
 }
