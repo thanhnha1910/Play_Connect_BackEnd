@@ -21,13 +21,13 @@ public interface ChatMemberRepository extends JpaRepository<ChatMember, Long> {
 
     List<ChatMember> findByUserId(Long userId);
 
-    @Query("SELECT cm FROM ChatMember cm WHERE cm.chatRoom.id = :chatRoomId AND cm.isActive = true")
+    @Query("SELECT cm FROM ChatMember cm LEFT JOIN FETCH cm.user WHERE cm.chatRoom.id = :chatRoomId AND cm.isActive = true")
     List<ChatMember> findActiveMembersByChatRoomId(@Param("chatRoomId") Long chatRoomId);
 
     @Query("SELECT cm FROM ChatMember cm WHERE cm.user.id = :userId AND cm.isActive = true")
     List<ChatMember> findActiveMembersByUserId(@Param("userId") Long userId);
 
-    @Query("SELECT cm.chatRoom FROM ChatMember cm WHERE cm.user.id = :userId AND cm.isActive = true")
+    @Query("SELECT DISTINCT cr FROM ChatMember cm JOIN cm.chatRoom cr LEFT JOIN FETCH cr.members m WHERE cm.user.id = :userId AND cm.isActive = true")
     List<ChatRoom> findActiveChatRoomsByUserId(@Param("userId") Long userId);
 
     boolean existsByChatRoomIdAndUserId(Long chatRoomId, Long userId);

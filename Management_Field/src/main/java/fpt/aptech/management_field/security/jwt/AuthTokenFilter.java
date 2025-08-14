@@ -36,8 +36,10 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             "/api/auth",
             "/api/fields",
             "/api/locations",
+            "/api/location-reviews",
             "/api/chatbot",
             "/api/test",
+            "/api/debug", // Debug endpoints
             "/api/booking/receipt", // Public booking receipt endpoints
             "/swagger-ui",
             "/v3/api-docs"
@@ -45,7 +47,6 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     
     private static final List<String> PUBLIC_PATHS = Arrays.asList(
             "/api/open-matches", // Only the base endpoint is public
-            "/api/draft-matches", // Allow public access to draft matches
             "/api/booking/payment-callback",
             "/api/booking/payment-cancel",
             "/api/booking/success",
@@ -54,6 +55,11 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             "/api/payment/callback", // VNPay callback endpoint
             "/api/payment/success",
             "/api/payment/cancel"
+    );
+    
+    // Paths that are public only for GET requests
+    private static final List<String> PUBLIC_GET_PATHS = Arrays.asList(
+            "/api/draft-matches" // Allow public GET access to draft matches
     );
 
     @Override
@@ -78,9 +84,15 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             logger.info("Path {} matches exact public path", path);
         }
         
-        boolean shouldSkip = matchesPrefix || matchesExactPath;
-        logger.info("=== shouldNotFilter FINAL result: {} (prefix: {}, exact: {}) ===", 
-            shouldSkip, matchesPrefix, matchesExactPath);
+        // Check if path matches public GET paths and method is GET
+        boolean matchesPublicGetPath = "GET".equals(method) && PUBLIC_GET_PATHS.contains(path);
+        if (matchesPublicGetPath) {
+            logger.info("Path {} matches public GET path for GET method", path);
+        }
+        
+        boolean shouldSkip = matchesPrefix || matchesExactPath || matchesPublicGetPath;
+        logger.info("=== shouldNotFilter FINAL result: {} (prefix: {}, exact: {}, publicGet: {}) ===", 
+            shouldSkip, matchesPrefix, matchesExactPath, matchesPublicGetPath);
         
         return shouldSkip;
     }

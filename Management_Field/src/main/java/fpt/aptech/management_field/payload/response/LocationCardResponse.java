@@ -14,6 +14,7 @@ public class LocationCardResponse {
     private String locationName;
     private String slug;
     private String address;
+    private String description;
     private String mainImageUrl;
     private int fieldCount;
     private Double averageRating;
@@ -35,6 +36,10 @@ public class LocationCardResponse {
     
     public void setAddress(String address) {
         this.address = address;
+    }
+    
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     public void setMainImageUrl(String mainImageUrl) {

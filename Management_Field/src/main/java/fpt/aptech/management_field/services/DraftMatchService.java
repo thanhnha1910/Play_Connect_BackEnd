@@ -54,10 +54,10 @@ public class DraftMatchService {
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
     
-    @Autowired
-    private AIRecommendationService aiRecommendationService;
-    
 
+    
+    @Autowired
+    private UnifiedCompatibilityService unifiedCompatibilityService;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -280,7 +280,7 @@ public class DraftMatchService {
         List<DraftMatch> draftMatches = draftMatchRepository.findAllActiveDraftMatches();
         
         if (userId != null) {
-            // Calculate compatibility scores using AIRecommendationService
+            // Calculate compatibility scores using UnifiedCompatibilityService
             Optional<User> userOpt = userRepository.findById(userId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
@@ -368,7 +368,7 @@ public class DraftMatchService {
         }
         
         if (userId != null) {
-            // Calculate compatibility scores using AIRecommendationService
+            // Calculate compatibility scores using UnifiedCompatibilityService
             Optional<User> userOpt = userRepository.findById(userId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
@@ -595,8 +595,8 @@ public class DraftMatchService {
             
             log.info("[RECOMMENDATION_RANKING] Found {} draft matches before recommendation ranking", matchDtos.size());
             
-            // Use recommendation service for draft matches ranking
-            List<DraftMatchDto> rankedMatches = aiRecommendationService.fallbackRankDraftMatches(user, matchDtos, sportType);
+            // Use unified compatibility service for draft matches ranking
+            List<DraftMatchDto> rankedMatches = unifiedCompatibilityService.calculateDraftMatchCompatibility(user, matchDtos, sportType);
             
             log.info("[RECOMMENDATION_RANKING] Successfully ranked {} draft matches using recommendation service", rankedMatches.size());
             return rankedMatches;
@@ -688,6 +688,11 @@ public class DraftMatchService {
         if (approvedCount >= draftMatch.getSlotsNeeded()) {
             draftMatch.setStatus(DraftMatchStatus.FULL);
             draftMatch = draftMatchRepository.save(draftMatch);
+            
+            // Manual conversion only - removed auto-convert logic
+            // Users must manually convert to real match using the convert button
+            log.info("Draft match {} is now full with {} approved users. Waiting for manual conversion.", 
+                    draftMatchId, approvedCount);
         }
         
         // Send notification to accepted user
@@ -1391,29 +1396,46 @@ public class DraftMatchService {
                 userId
         );
         
-        // Convert to response format with compatibility scores
-        List<Map<String, Object>> recommendations = new ArrayList<>();
+        log.info("[DRAFT_MATCH_RECOMMEND_TEAMMATES] Found {} potential teammates for user {}", 
+                potentialTeammates.size(), userId);
         
-        for (User teammate : potentialTeammates) {
-            Map<String, Object> recommendation = new HashMap<>();
-            recommendation.put("id", teammate.getId());
-            recommendation.put("username", teammate.getUsername());
-            recommendation.put("fullName", teammate.getFullName());
-            recommendation.put("imageUrl", teammate.getImageUrl());
-            recommendation.put("skillLevel", "N/A"); // Skill level not available in User model
-            recommendation.put("location", teammate.getAddress());
-            recommendation.put("compatibilityScore", calculateCompatibilityScore(currentUser, teammate, request));
+        // Use UnifiedCompatibilityService for teammate recommendations
+        try {
+            List<Map<String, Object>> recommendations = unifiedCompatibilityService.calculateTeammateCompatibility(
+                    currentUser, potentialTeammates, request.getSportType());
             
-            recommendations.add(recommendation);
+            // Limit to requested number
+            int limit = Math.min(request.getNumberOfTeammates(), recommendations.size());
+            List<Map<String, Object>> limitedRecommendations = recommendations.subList(0, limit);
+            
+            log.info("[DRAFT_MATCH_RECOMMEND_TEAMMATES] Successfully calculated {} teammate recommendations using unified compatibility service", 
+                    limitedRecommendations.size());
+            
+            return limitedRecommendations;
+            
+        } catch (Exception e) {
+            log.error("[DRAFT_MATCH_RECOMMEND_TEAMMATES] Error using unified compatibility service: {}", e.getMessage(), e);
+            
+            // Fallback to basic recommendations without compatibility scores
+            List<Map<String, Object>> fallbackRecommendations = new ArrayList<>();
+            
+            for (User teammate : potentialTeammates) {
+                Map<String, Object> recommendation = new HashMap<>();
+                recommendation.put("id", teammate.getId());
+                recommendation.put("username", teammate.getUsername());
+                recommendation.put("fullName", teammate.getFullName());
+                recommendation.put("imageUrl", teammate.getImageUrl());
+                recommendation.put("skillLevel", "N/A"); // Skill level not available in User model
+                recommendation.put("location", teammate.getAddress());
+                recommendation.put("compatibilityScore", 0.5); // Default fallback score
+                
+                fallbackRecommendations.add(recommendation);
+            }
+            
+            // Limit to requested number
+            int limit = Math.min(request.getNumberOfTeammates(), fallbackRecommendations.size());
+            return fallbackRecommendations.subList(0, limit);
         }
-        
-        // Sort by compatibility score
-        recommendations.sort((a, b) -> 
-                Double.compare((Double) b.get("compatibilityScore"), (Double) a.get("compatibilityScore")));
-        
-        // Limit to requested number
-        int limit = Math.min(request.getNumberOfTeammates(), recommendations.size());
-        return recommendations.subList(0, limit);
     }
     
     private void createNotificationForRemovedUser(DraftMatch draftMatch, User removedUser) {
@@ -1446,39 +1468,14 @@ public class DraftMatchService {
         notificationService.createNotification(notification);
     }
     
-    private double calculateCompatibilityScore(User currentUser, User teammate, RecommendTeammatesRequest request) {
-        double score = 0.0;
-        
-        // Skill level compatibility (30%) - Skip for now as skill level not available in User model
-        score += 30.0; // Give full score for skill level compatibility
-        
-        // Location proximity (25%)
-        if (teammate.getAddress() != null && request.getLocation() != null) {
-            if (teammate.getAddress().contains(request.getLocation()) || 
-                request.getLocation().contains(teammate.getAddress())) {
-                score += 25.0;
-            }
-        }
-        
-        // Age compatibility (20%) - Skip for now as age field may not be available
-        score += 20.0; // Give full score for age compatibility
-        
-        // Gender preference (15%) - Skip for now as gender field may not be available
-        score += 15.0; // Give full score for gender compatibility
-        
-        // Random factor for diversity (10%)
-        score += Math.random() * 10.0;
-        
-        return Math.min(score, 100.0);
-    }
+
     
     private List<DraftMatchDto> calculateCompatibilityScores(User user, List<DraftMatchDto> matchDtos, String sportType) {
         try {
             log.info("[COMPATIBILITY_CALCULATION] Calculating compatibility scores for {} draft matches", matchDtos.size());
             
-            // Use AIRecommendationService to calculate compatibility scores
-            // This will set compatibility scores but won't sort by AI ranking
-            List<DraftMatchDto> matchesWithScores = aiRecommendationService.fallbackRankDraftMatches(user, matchDtos, sportType);
+            // Use UnifiedCompatibilityService for consistent scoring
+            List<DraftMatchDto> matchesWithScores = unifiedCompatibilityService.calculateDraftMatchCompatibility(user, matchDtos, sportType);
             
             log.info("[COMPATIBILITY_CALCULATION] Successfully calculated compatibility scores for {} draft matches", matchesWithScores.size());
             return matchesWithScores;

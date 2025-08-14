@@ -1,5 +1,6 @@
 package fpt.aptech.management_field.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ public class ChatRoom {
     private List<ChatMember> members = new ArrayList<>();
 
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<ChatMessage> messages = new ArrayList<>();
 
     @PrePersist

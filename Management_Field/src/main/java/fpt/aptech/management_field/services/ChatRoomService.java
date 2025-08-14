@@ -182,10 +182,12 @@ public class ChatRoomService {
                         removedUser.getFullName() + " đã bị xóa khỏi phòng chat bởi admin", LocalDateTime.now()));
     }
 
+    @Transactional(readOnly = true)
     public List<ChatRoom> getUserChatRooms(Long userId) {
         return chatMemberRepository.findActiveChatRoomsByUserId(userId);
     }
 
+    @Transactional(readOnly = true)
     public List<ChatRoomDTO> getUserChatRoomsDTO(Long userId) {
         List<ChatRoom> chatRooms = getUserChatRooms(userId);
         return chatRooms.stream().map(room -> {
@@ -194,18 +196,21 @@ public class ChatRoomService {
             dto.setName(room.getName());
             dto.setCreatedAt(room.getCreatedAt());
             
-            // Lấy tin nhắn cuối cùng
-            ChatMessage lastMessage = room.getLastMessage();
-            if (lastMessage != null) {
+            // Lấy tin nhắn cuối cùng từ repository
+            List<ChatMessage> lastMessages = chatMessageRepository.findByChatRoomIdOrderBySentAtDesc(room.getId());
+            if (!lastMessages.isEmpty()) {
+                ChatMessage lastMessage = lastMessages.get(0);
                 dto.setLastMessage(lastMessage.getContent());
                 dto.setLastMessageTime(lastMessage.getSentAt());
             }
             
-            dto.setMemberCount(room.getActiveMemberCount());
+            // Lấy số lượng thành viên active từ repository
+            dto.setMemberCount(chatMemberRepository.countByChatRoomIdAndIsActiveTrue(room.getId()));
             return dto;
         }).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<ChatMemberDTO> getChatRoomMembers(Long chatRoomId) {
         System.out.println("🔍 DEBUG: Getting members for chatRoomId: " + chatRoomId);
         List<ChatMember> members = chatMemberRepository.findActiveMembersByChatRoomId(chatRoomId);
@@ -263,6 +268,7 @@ public class ChatRoomService {
         return message;
     }
 
+    @Transactional(readOnly = true)
     public List<ChatMessageDTO> getMessages(Long chatRoomId, Long userId) {
         // Kiểm tra xem user có phải là thành viên không
         Optional<ChatMember> member = chatMemberRepository.findByChatRoomIdAndUserId(chatRoomId, userId);

@@ -10,6 +10,7 @@ import fpt.aptech.management_field.repositories.LocationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,9 +39,10 @@ public class FieldTypeService {
             .collect(Collectors.toList());
     }
     
+    @Transactional
     public FieldTypeDto createFieldType(Long locationId, UpsertFieldTypeRequest request, User currentUser) {
-        // Verify location ownership
-        Location location = locationRepository.findById(locationId)
+        // Verify location ownership - use JOIN FETCH to avoid LazyInitializationException
+        Location location = locationRepository.findByIdWithOwner(locationId)
             .orElseThrow(() -> new RuntimeException("Location not found with id: " + locationId));
         
         if (!location.getOwner().getUser().getId().equals(currentUser.getId())) {

@@ -303,6 +303,12 @@ package fpt.aptech.management_field.controllers;
                         .body(new MessageResponse("Error: Reset password token has expired! Please request a new password reset."));
             }
 
+            // Check if new password is same as current password
+            if (encoder.matches(password, user.getPassword())) {
+                return ResponseEntity.badRequest()
+                        .body(new MessageResponse("Error: New password must be different from current password!"));
+            }
+
             // Update password and clear token
             user.setPassword(encoder.encode(password));
             user.setResetPasswordToken(null);
@@ -386,6 +392,19 @@ package fpt.aptech.management_field.controllers;
             try {
                 OAuth2Service.OAuth2LoginResult result = oauth2Service.processOAuth2Login(request.getCode(), provider);
                 User user = result.getUser();
+                
+                // Check user status before allowing login
+                if (user.getStatus() == UserStatus.SUSPENDED) {
+                    return ResponseEntity
+                            .status(HttpStatus.FORBIDDEN)
+                            .body(new MessageResponse("Error: Tài khoản đã bị tạm ngưng. Vui lòng liên hệ quản trị viên."));
+                }
+                
+                if (user.getStatus() == UserStatus.PENDING_APPROVAL) {
+                    return ResponseEntity
+                            .status(HttpStatus.FORBIDDEN)
+                            .body(new MessageResponse("Error: Tài khoản đang chờ phê duyệt. Vui lòng chờ Quản trị viên xét duyệt."));
+                }
                 
                 // Convert roles to Set<String>
                 Set<String> roleNames = user.getRoles().stream()

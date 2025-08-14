@@ -48,6 +48,9 @@ public class LocationService {
     private LocationReviewMapper locationReviewMapper;
     
     @Autowired
+    private LocationReviewService locationReviewService;
+    
+    @Autowired
     private BookingRepository bookingRepository;
     
     @Autowired
@@ -84,6 +87,7 @@ public class LocationService {
         response.setName(location.getName());
         response.setSlug(location.getSlug());
         response.setAddress(location.getAddress());
+        response.setDescription(location.getDescription());
         response.setLatitude(location.getLatitude());
         response.setLongitude(location.getLongitude());
         
@@ -95,7 +99,20 @@ public class LocationService {
         BigDecimal averageRating = locationRepository.getAverageRatingByLocationId(location.getLocationId());
         response.setAverageRating(averageRating);
         
-        response.setThumbnailImageUrl(null);
+        // Get thumbnail image from location or first field
+        String thumbnailUrl = location.getThumbnailUrl();
+        if (thumbnailUrl == null || thumbnailUrl.trim().isEmpty()) {
+            // Try to get thumbnail from first field if location doesn't have one
+            List<Field> fields = fieldRepository.getFieldsByLocationId(location.getLocationId());
+            if (!fields.isEmpty() && fields.get(0).getThumbnailUrl() != null) {
+                thumbnailUrl = fields.get(0).getThumbnailUrl();
+            }
+        }
+        response.setThumbnailImageUrl(thumbnailUrl);
+        
+        // Get starting price (minimum hourly rate from fields)
+        Integer minHourlyRate = locationRepository.getMinimumHourlyRateByLocationId(location.getLocationId());
+        response.setStartingPrice(minHourlyRate != null ? new BigDecimal(minHourlyRate) : null);
         
         return response;
     }
@@ -182,6 +199,7 @@ public class LocationService {
                         response.setName(location.getName());
                         response.setSlug(location.getSlug());
                         response.setAddress(location.getAddress());
+                        response.setDescription(location.getDescription());
                         
                         // Ensure latitude and longitude are not null before setting
                         if (location.getLatitude() != null) {
@@ -247,6 +265,7 @@ public class LocationService {
         response.setLocationName(location.getName());
         response.setSlug(location.getSlug());
         response.setAddress(location.getAddress());
+        response.setDescription(location.getDescription());
 
         // Get field count
         Integer fieldCount = locationRepository.countFieldsByLocationId(location.getLocationId());
@@ -321,13 +340,14 @@ public class LocationService {
             List<Field> locationFields = fieldRepository.getFieldsByLocationId(location.getLocationId());
             System.out.println("Found " + locationFields.size() + " fields for location");
             
-            Map<FieldType, List<Field>> groupedByType = locationFields.stream()
-                    .collect(Collectors.groupingBy(Field::getType));
-            System.out.println("Grouped fields by " + groupedByType.size() + " types");
+            Map<Long, List<Field>> groupedByTypeId = locationFields.stream()
+                    .collect(Collectors.groupingBy(field -> field.getType().getTypeId()));
+            System.out.println("Grouped fields by " + groupedByTypeId.size() + " types");
             
-            List<FieldTypeDto> typeDTOS = groupedByType.entrySet().stream()
+            List<FieldTypeDto> typeDTOS = groupedByTypeId.entrySet().stream()
                     .map(entry -> {
-                        FieldType type = entry.getKey();
+                        Long typeId = entry.getKey();
+                        FieldType type = entry.getValue().get(0).getType(); // Get FieldType from first field
                         List<FieldDTO> fieldDTOs = entry.getValue().stream()
                                 .map(field -> {
                                     try {
@@ -371,13 +391,13 @@ public class LocationService {
             
             System.out.println("Created " + typeDTOS.size() + " field type DTOs");
             
-            List<LocationReview> locationReviews = locationReviewRepository.findByLocationId(location.getLocationId());
-            List<LocationReviewDTO> reviewDTOS = locationReviewMapper.toDtoList(locationReviews);
+            List<LocationReviewDTO> reviewDTOS = locationReviewService.getLocationReviewDTOs(location.getLocationId());
             System.out.println("Found " + reviewDTOS.size() + " reviews");
 
             LocationDetailResponse response = new LocationDetailResponse();
             response.setName(location.getName());
             response.setAddress(location.getAddress());
+            response.setDescription(location.getDescription());
             response.setFieldTypes(typeDTOS);
             response.setReviews(reviewDTOS);
             

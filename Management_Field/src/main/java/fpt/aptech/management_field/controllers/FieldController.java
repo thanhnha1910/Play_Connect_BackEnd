@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -31,6 +32,7 @@ public class FieldController {
     private GeocodingService geocodingService;
 
     @GetMapping
+    @Transactional(readOnly = true)
     @Operation(summary = "Get all fields", description = "Retrieve a list of all available fields")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully retrieved fields list"),
@@ -75,6 +77,7 @@ public class FieldController {
 //    }
 
     @GetMapping("/{fieldId}")
+    @Transactional(readOnly = true)
     @Operation(summary  = "Get field details", description = "Get detailed information about a specific field")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully retrieved field details"),

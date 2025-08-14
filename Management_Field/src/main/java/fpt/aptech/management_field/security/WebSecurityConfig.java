@@ -87,6 +87,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/api/fields/**").permitAll()
                         .requestMatchers("/api/locations/**").permitAll()
+                        .requestMatchers("/api/location-reviews/**").permitAll()
                         .requestMatchers("/api/sports/**").permitAll()
                         .requestMatchers("/api/chatbot/**").permitAll()
                         .requestMatchers("/uploads/**").permitAll() // Allow public access to uploaded files
@@ -106,6 +107,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/booking/confirm").permitAll() // Payment confirmation
                         .requestMatchers("/api/booking/paypal/callback").permitAll() // New PayPal callback endpoint
                         .requestMatchers("/api/booking/debug/**").permitAll() // Debug endpoints
+                        .requestMatchers("/api/debug/**").permitAll() // Debug endpoints
                         // VNPay specific endpoints that need to be public
                         .requestMatchers("/api/payment/callback").permitAll() // VNPay callback
                         .requestMatchers("/api/payment/**").permitAll() // All VNPay payment endpoints

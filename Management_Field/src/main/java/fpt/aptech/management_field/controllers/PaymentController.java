@@ -2,6 +2,8 @@ package fpt.aptech.management_field.controllers;
 
 import fpt.aptech.management_field.models.Payment;
 import fpt.aptech.management_field.models.ParticipatingTeam;
+import fpt.aptech.management_field.models.Booking;
+import java.util.List;
 import fpt.aptech.management_field.services.BookingService;
 import fpt.aptech.management_field.services.ParticipatingTeamService;
 import fpt.aptech.management_field.services.PaymentService;
@@ -34,10 +36,15 @@ public class PaymentController {
             
             // Then, update the corresponding booking or tournament status
             if ("BOOKING".equals(callbackPayment.getPayableType().name())) {
-                // Update booking status to confirmed
+                // Update booking status to confirmed (handle both single and batch bookings)
                 try {
-                    bookingService.confirmPayment(callbackPayment.getPayableId(), null, null);
-                    logger.info("Booking {} status updated to confirmed after payment success", callbackPayment.getPayableId());
+                    // Try batch confirmation first (this will handle multiple bookings created together)
+                    List<Booking> confirmedBookings = bookingService.confirmBatchPayment(callbackPayment.getPayableId());
+                    if (confirmedBookings.size() > 1) {
+                        logger.info("Batch booking confirmation: {} bookings confirmed after payment success", confirmedBookings.size());
+                    } else {
+                        logger.info("Single booking {} status updated to confirmed after payment success", callbackPayment.getPayableId());
+                    }
                 } catch (Exception e) {
                     logger.error("Failed to update booking status for booking {}: {}", callbackPayment.getPayableId(), e.getMessage());
                 }
@@ -47,7 +54,10 @@ public class PaymentController {
                 // Update tournament participation status to confirmed
                 try {
                     ParticipatingTeam participant = participatingTeamService.confirmRegistration(callbackPayment.getPayableId());
-                    logger.info("Tournament participation {} status updated to confirmed after payment success", callbackPayment.getPayableId());
+                    // IMPORTANT: Link the payment to the participating team
+                    participant.setEntryPayment(callbackPayment);
+                    participatingTeamService.save(participant);
+                    logger.info("Tournament participation {} status updated to confirmed and payment linked after payment success", callbackPayment.getPayableId());
                     // Use tournament ID from the participant for redirect
                     Long tournamentId = participant.getTournament().getTournamentId();
                     String redirectUrl = String.format("http://localhost:3000/en/tournament/receipt/%d?status=success", tournamentId);

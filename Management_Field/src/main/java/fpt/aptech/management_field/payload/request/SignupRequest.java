@@ -30,4 +30,33 @@ public class SignupRequest {
     private String phoneNumber;
     
     private String address;
+    
+    // Getters
+    public String getUsername() {
+        return username;
+    }
+    
+    public String getEmail() {
+        return email;
+    }
+    
+    public String getPassword() {
+        return password;
+    }
+    
+    public String getFullName() {
+        return fullName;
+    }
+    
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+    
+    public String getAddress() {
+        return address;
+    }
+    
+    public Set<String> getRole() {
+        return role;
+    }
 }

@@ -99,10 +99,8 @@ public class CommentService {
     public CommentResponse replyToComment(Long parentCommentId, String content, Long postId, Long userId) {
         Comment parentComment = commentRepository.findById(parentCommentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Parent comment id: " + parentCommentId));
-
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Post id: " + postId));
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User id: " + userId));
 
@@ -115,5 +113,11 @@ public class CommentService {
 
         Comment savedReply = commentRepository.save(replyComment);
         return commentMapper.toDto(savedReply, userId);
+    }
+
+    public CommentResponse getCommentById(Long commentId, Long userId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment id: " + commentId));
+        return commentMapper.toDto(comment, userId);
     }
 }

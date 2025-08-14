@@ -68,4 +68,8 @@ public class AdminStatsResponse {
     public void setRecentBookings(long recentBookings) {
         this.recentBookings = recentBookings;
     }
+      private long totalCommission; // Admin's 5% commission
+    private long totalRevenue;    // Total booking amounts
+    private double averageBookingValue;
+    private double commissionRate = 0.05;
 }

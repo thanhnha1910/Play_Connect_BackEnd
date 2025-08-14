@@ -1,5 +1,7 @@
 package fpt.aptech.management_field.controllers;
 
+import fpt.aptech.management_field.payload.dtos.ChatbotRequestDTO;
+import fpt.aptech.management_field.payload.dtos.ChatbotResponseDTO;
 import fpt.aptech.management_field.services.ChatbotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,37 +24,32 @@ public class ChatbotController {
     private ChatbotService chatbotService;
 
     @PostMapping("/query")
-    @Operation(summary = "Send message to chatbot", description = "Send a user message to the AI chatbot and get intelligent response")
+    @Operation(summary = "Send message to chatbot v2.0", description = "Send a user message to the AI chatbot and get intelligent response with context support")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully processed message"),
             @ApiResponse(responseCode = "400", description = "Invalid request body"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
-    public ResponseEntity<Map<String, String>> sendMessage(
-            @Parameter(description = "Request body containing user message", required = true)
-            @RequestBody Map<String, String> request) {
+    public ResponseEntity<ChatbotResponseDTO> sendMessage(
+            @Parameter(description = "Request body containing user message and optional context", required = true)
+            @RequestBody ChatbotRequestDTO request) {
         
         try {
-            String message = request.get("message");
-            
-            if (message == null || message.trim().isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Message cannot be empty"));
+            if (request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+                ChatbotResponseDTO errorResponse = new ChatbotResponseDTO();
+                errorResponse.setText("Message cannot be empty");
+                errorResponse.setSessionId(request.getSessionId());
+                return ResponseEntity.badRequest().body(errorResponse);
             }
             
-            String response = chatbotService.getResponse(message.trim());
-            
-            return ResponseEntity.ok(Map.of(
-                "response", response,
-                "status", "success"
-            ));
+            ChatbotResponseDTO response = chatbotService.processMessage(request);
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                .body(Map.of(
-                    "error", "Internal server error",
-                    "message", "Unable to process your request at the moment"
-                ));
+            ChatbotResponseDTO errorResponse = new ChatbotResponseDTO();
+            errorResponse.setText("Unable to process your request at the moment");
+            errorResponse.setSessionId(request.getSessionId());
+            return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
 

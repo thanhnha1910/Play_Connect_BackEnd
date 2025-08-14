@@ -34,6 +34,10 @@ public class DraftMatchDto {
     private Double compatibilityScore; // AI compatibility score
     private Double explicitScore; // AI explicit score
     private Double implicitScore; // AI implicit score
+    private Double baseCompatibilityScore; // Base compatibility score for validation
+    private Double originalAIScore; // Original AI score before validation
+    private Boolean scoreValidated; // Whether score has been validated
+    private Boolean aiScoreUsed; // Whether AI score was used instead of fallback
     
     // Explicit getters and setters for compatibility
     public Long getId() {
@@ -142,5 +146,25 @@ public class DraftMatchDto {
     
     public void setCurrentUserStatus(String currentUserStatus) {
         this.currentUserStatus = currentUserStatus;
+    }
+    
+    public void setBaseCompatibilityScore(Double baseCompatibilityScore) {
+        this.baseCompatibilityScore = baseCompatibilityScore;
+    }
+    
+    public void setOriginalAIScore(Double originalAIScore) {
+        this.originalAIScore = originalAIScore;
+    }
+    
+    public void setScoreValidated(Boolean scoreValidated) {
+        this.scoreValidated = scoreValidated;
+    }
+    
+    public Boolean getAiScoreUsed() {
+        return aiScoreUsed;
+    }
+    
+    public void setAiScoreUsed(Boolean aiScoreUsed) {
+        this.aiScoreUsed = aiScoreUsed;
     }
 }

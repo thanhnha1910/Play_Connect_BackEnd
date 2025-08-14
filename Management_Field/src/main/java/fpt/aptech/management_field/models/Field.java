@@ -54,6 +54,10 @@ public class Field {
     @Column(name = "image_gallery")
     private String imageGallery; // JSON string of URLs
     
+    @OneToMany(mappedBy = "field", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<FieldClosure> fieldClosures;
+    
     @PrePersist
     public void prePersist() {
         if (isActive == null) {
@@ -164,8 +168,4 @@ public class Field {
     public void setImageGallery(String imageGallery) {
         this.imageGallery = imageGallery;
     }
-
-    @OneToMany(mappedBy = "field", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonIgnore
-    private List<FieldClosure> fieldClosures;
 }

@@ -11,6 +11,7 @@ public class LocationDto {
     private Long locationId;
     private String name;
     private String address;
+    private String description; // Thêm field mô tả
     private String city;     // Thêm field này
     private String country;  // Thêm field này
     private String thumbnailUrl; // Thêm field cho thumbnail
@@ -28,6 +29,10 @@ public class LocationDto {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+    
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     // Thêm các setter mới

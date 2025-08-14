@@ -1,17 +1,22 @@
 package fpt.aptech.management_field.controllers;
 
 import fpt.aptech.management_field.models.User;
+import fpt.aptech.management_field.models.AdminRevenue;
 import fpt.aptech.management_field.models.Sport;
 import fpt.aptech.management_field.payload.dtos.OwnerAnalyticsDto;
 import fpt.aptech.management_field.payload.dtos.OwnerSummaryDto;
 import fpt.aptech.management_field.payload.dtos.PendingOwnerDto;
+import fpt.aptech.management_field.payload.dtos.RevenueAnalyticsDto;
 import fpt.aptech.management_field.payload.dtos.UserSummaryDto;
+import fpt.aptech.management_field.payload.dtos.AdminAnalyticsDto;
+import fpt.aptech.management_field.payload.dtos.DashboardWidgetDto;
 import fpt.aptech.management_field.payload.dtos.DetailedAnalyticsDto;
 import fpt.aptech.management_field.payload.request.CreateSportRequest;
 import fpt.aptech.management_field.payload.request.UpdateSportRequest;
 import fpt.aptech.management_field.payload.response.AdminStatsResponse;
 import fpt.aptech.management_field.payload.response.MessageResponse;
 import fpt.aptech.management_field.repositories.SportRepository;
+import fpt.aptech.management_field.services.AdminAnalyticsService;
 import fpt.aptech.management_field.services.AdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -42,15 +48,158 @@ public class AdminController {
     
     @Autowired
     private SportRepository sportRepository;
+    
+    @Autowired
+    private AdminAnalyticsService adminAnalyticsService;
 
-    @GetMapping("/stats")
-    public ResponseEntity<?> getDashboardStats() {
+
+
+    @GetMapping("/dashboard/stats")
+    public ResponseEntity<AdminStatsResponse> getDashboardStats() {
         try {
             AdminStatsResponse stats = adminService.getDashboardStats();
             return ResponseEntity.ok(stats);
         } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Error: " + e.getMessage()));
+                      return ResponseEntity.status(500).body(null);
+
+        }
+    }
+
+    @GetMapping("/dashboard/widgets")
+    public ResponseEntity<DashboardWidgetDto> getDashboardWidgets() {
+        try {
+            DashboardWidgetDto widgets = adminAnalyticsService.getDashboardWidgets();
+            return ResponseEntity.ok(widgets);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+@GetMapping("/dashboard/recent-activities")
+    public ResponseEntity<List<DashboardWidgetDto.RecentActivity>> getRecentActivities(
+            @RequestParam(defaultValue = "10") int limit) {
+        try {
+            List<DashboardWidgetDto.RecentActivity> activities =
+                    adminAnalyticsService.getRecentActivities(limit);
+            return ResponseEntity.ok(activities);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+      @GetMapping("/analytics")
+    public ResponseEntity<AdminAnalyticsDto> getAnalytics(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        try {
+            AdminAnalyticsDto analytics = adminService.getDetailedAnalytics(startDate, endDate);
+            return ResponseEntity.ok(analytics);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+ @GetMapping("/analytics/revenue")
+    public ResponseEntity<RevenueAnalyticsDto> getRevenueAnalytics(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        try {
+            RevenueAnalyticsDto revenue = adminAnalyticsService.getRevenueAnalytics(startDate, endDate);
+            return ResponseEntity.ok(revenue);
+        } catch (Exception e) {
+            
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+     @GetMapping("/analytics/top-fields")
+    public ResponseEntity<List<AdminAnalyticsDto.TopField>> getTopFields(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "10") int limit) {
+        try {
+            List<AdminAnalyticsDto.TopField> topFields =
+                    adminAnalyticsService.getTopPerformingFields(startDate, endDate, limit);
+            return ResponseEntity.ok(topFields);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+@GetMapping("/analytics/hourly-bookings")
+    public ResponseEntity<List<AdminAnalyticsDto.HourlyData>> getHourlyBookings(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        try {
+            List<AdminAnalyticsDto.HourlyData> hourlyData =
+                    adminAnalyticsService.getHourlyBookingData(startDate, endDate);
+            return ResponseEntity.ok(hourlyData);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @GetMapping("/analytics/location-performance")
+    public ResponseEntity<List<AdminAnalyticsDto.LocationRevenue>> getLocationPerformance(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        try {
+            List<AdminAnalyticsDto.LocationRevenue> locationData =
+                    adminAnalyticsService.getLocationPerformance(startDate, endDate);
+            return ResponseEntity.ok(locationData);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @GetMapping("/analytics/booking-status")
+    public ResponseEntity<AdminAnalyticsDto.BookingStatusStats> getBookingStatusStats(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        try {
+            AdminAnalyticsDto.BookingStatusStats stats =
+                    adminAnalyticsService.getBookingStatusStats(startDate, endDate);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    // ========== TRANSACTION ENDPOINTS ==========
+
+    @GetMapping("/transactions")
+    public ResponseEntity<Page<AdminRevenue>> getTransactions(
+            Pageable pageable,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String search) {
+        try {
+            Page<AdminRevenue> transactions = adminAnalyticsService.getTransactions(
+                    pageable, startDate, endDate, search);
+            return ResponseEntity.ok(transactions);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Page.empty());
+        }
+    }
+
+    @GetMapping("/transactions/recent")
+    public ResponseEntity<List<AdminAnalyticsDto.RecentTransaction>> getRecentTransactions(
+            @RequestParam(defaultValue = "10") int limit) {
+        try {
+            List<AdminAnalyticsDto.RecentTransaction> transactions =
+                    adminAnalyticsService.getRecentTransactions(limit);
+            return ResponseEntity.ok(transactions);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @GetMapping("/transactions/export")
+    public ResponseEntity<Map<String, Object>> exportTransactions(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "csv") String format) {
+        try {
+            Map<String, Object> exportData = adminAnalyticsService.exportTransactions(
+                    startDate, endDate, format);
+            return ResponseEntity.ok(exportData);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Export failed"));
         }
     }
 
@@ -75,6 +224,18 @@ public class AdminController {
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(new MessageResponse("Error: " + e.getMessage()));
+        }
+    }
+     @GetMapping("/analytics/revenue/daily")
+    public ResponseEntity<List<AdminAnalyticsDto.DailyRevenueData>> getDailyRevenue(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        try {
+            List<AdminAnalyticsDto.DailyRevenueData> dailyRevenue =
+                    adminAnalyticsService.getDailyRevenueData(startDate, endDate);
+            return ResponseEntity.ok(dailyRevenue);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(List.of());
         }
     }
 
@@ -116,6 +277,17 @@ public class AdminController {
         try {
             User suspendedOwner = adminService.suspendOwner(userId);
             return ResponseEntity.ok(new MessageResponse("Owner suspended successfully!"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Error: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/owners/{userId}/activate")
+    public ResponseEntity<?> activateOwner(@PathVariable Long userId) {
+        try {
+            User activatedOwner = adminService.activateOwner(userId);
+            return ResponseEntity.ok(new MessageResponse("Owner activated successfully!"));
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(new MessageResponse("Error: " + e.getMessage()));
@@ -189,22 +361,7 @@ public class AdminController {
      }
      
      // Analytics Endpoint
-     @GetMapping("/analytics")
-     public ResponseEntity<?> getDetailedAnalytics(
-             @RequestParam(required = false) String startDate,
-             @RequestParam(required = false) String endDate) {
-         try {
-             LocalDate start = startDate != null ? LocalDate.parse(startDate) : LocalDate.now().minusMonths(3);
-             LocalDate end = endDate != null ? LocalDate.parse(endDate) : LocalDate.now();
-             
-             DetailedAnalyticsDto analytics = adminService.getDetailedAnalytics(start, end);
-             return ResponseEntity.ok(analytics);
-         } catch (Exception e) {
-             return ResponseEntity.badRequest()
-                     .body(new MessageResponse("Error: " + e.getMessage()));
-         }
-     }
-     
+   
      // Sport Management Endpoints
      @GetMapping("/sports")
      @Operation(summary = "Get all sports (including inactive)", description = "Retrieve all sports for admin management")

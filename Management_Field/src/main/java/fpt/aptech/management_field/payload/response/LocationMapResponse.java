@@ -14,11 +14,13 @@ public class LocationMapResponse {
     private String name;
     private String slug;
     private String address;
+    private String description;
     private BigDecimal latitude;
     private BigDecimal longitude;
     private Integer fieldCount;
     private BigDecimal averageRating;
     private String thumbnailImageUrl;
+    private BigDecimal startingPrice;
     
     // Explicit setters for compatibility
     public void setLocationId(Long locationId) {
@@ -31,6 +33,10 @@ public class LocationMapResponse {
     
     public void setAddress(String address) {
         this.address = address;
+    }
+    
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     public void setLatitude(BigDecimal latitude) {
@@ -55,5 +61,9 @@ public class LocationMapResponse {
     
     public void setThumbnailImageUrl(String thumbnailImageUrl) {
         this.thumbnailImageUrl = thumbnailImageUrl;
+    }
+    
+    public void setStartingPrice(BigDecimal startingPrice) {
+        this.startingPrice = startingPrice;
     }
 }

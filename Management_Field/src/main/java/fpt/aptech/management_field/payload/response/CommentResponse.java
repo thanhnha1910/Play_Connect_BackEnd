@@ -17,5 +17,6 @@ public class CommentResponse {
     private String userName;
     private String userAvatar;
     private int userLikeStatus;
+    private long likeCount;
     private List<CommentResponse> childComments = new ArrayList<>();
 }

@@ -48,6 +48,10 @@ public class CommentMapper {
             }
         }
 
+        // Calculate total likes for this comment
+        Long totalLikes = commentLikeRepository.countLikesByComment(comment);
+        dto.setLikeCount(totalLikes != null ? totalLikes : 0L);
+
         return dto;
     }
 }
