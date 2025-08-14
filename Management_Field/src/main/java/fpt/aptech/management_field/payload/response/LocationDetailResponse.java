@@ -14,6 +14,7 @@ import java.util.List;
 public class LocationDetailResponse {
     private String name;
     private String address;
+    private String description;
     private List<FieldTypeDto> fieldTypes;
     private List<LocationReviewDTO> reviews;
     
@@ -32,6 +33,14 @@ public class LocationDetailResponse {
     
     public void setAddress(String address) {
         this.address = address;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     public List<FieldTypeDto> getFieldTypes() {

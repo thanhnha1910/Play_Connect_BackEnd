@@ -10,6 +10,7 @@ import fpt.aptech.management_field.repositories.PostLikeRepository;
 import fpt.aptech.management_field.repositories.UserRepository;
 import fpt.aptech.management_field.services.CommentService;
 import fpt.aptech.management_field.services.FileStorageService;
+import fpt.aptech.management_field.services.ImageStorageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -37,6 +38,9 @@ public class PostController {
 
     @Autowired
     private FileStorageService fileStorageService;
+    
+    @Autowired
+    private ImageStorageService imageStorageService;
 
     @GetMapping
     public ResponseEntity<List<PostResponse>> getAllPosts(@RequestParam(required = false) Long userId) {
@@ -58,12 +62,12 @@ public class PostController {
         post.setUser(user);
 
         if (file != null && !file.isEmpty()) {
-            String fileName = fileStorageService.storeFile(file);
-            String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path("/uploads/")
-                    .path(fileName)
-                    .toUriString();
-            post.setImageUrl(fileDownloadUri);
+            try {
+                String imageUrl = imageStorageService.uploadSingleImage(file, ImageStorageService.ImageType.POST_COMMUNITY);
+                post.setImageUrl(imageUrl);
+            } catch (Exception e) {
+                throw new RuntimeException("Error uploading image: " + e.getMessage());
+            }
         }
 
         Post savedPost = postRepository.save(post);

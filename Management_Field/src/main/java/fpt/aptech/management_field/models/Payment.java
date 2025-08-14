@@ -44,5 +44,22 @@ public class Payment {
     @Column(name = "payable_type")
     @Enumerated(EnumType.STRING)
     private PaymentPayable payableType;
+    // New fields for admin commission
+    @Column(name = "admin_commission")
+    private Integer adminCommission; // 5% of total amount
+
+    @Column(name = "owner_amount")
+    private Integer ownerAmount; // 95% of total amount
+
+    @Column(name = "commission_rate")
+    private Double commissionRate = 0.05; // 5%
+
+    // Helper methods
+    public void calculateCommission() {
+        if (this.total != null) {
+            this.adminCommission = (int) (this.total * this.commissionRate);
+            this.ownerAmount = this.total - this.adminCommission;
+        }
+    }
 }
 

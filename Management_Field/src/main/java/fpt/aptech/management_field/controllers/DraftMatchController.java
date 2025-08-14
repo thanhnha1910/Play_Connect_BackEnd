@@ -431,6 +431,44 @@ public class DraftMatchController {
     }
 
     /**
+     * Get draft matches with user-specific information (authentication required)
+     * GET /api/draft-matches/with-user-info
+     */
+    @GetMapping("/with-user-info")
+    public ResponseEntity<ApiResponse<List<DraftMatchDto>>> getDraftMatchesWithUserInfo(
+            @RequestParam(required = false) String sportType) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            logger.info("[DRAFT_MATCH_WITH_USER_INFO] User {} requesting draft matches with user info for sport: {}", 
+                       userDetails.getId(), sportType);
+            
+            User currentUser = userRepository.findById(userDetails.getId()).orElse(null);
+            if (currentUser == null) {
+                logger.error("[DRAFT_MATCH_WITH_USER_INFO] User {} not found", userDetails.getId());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(false, "User not found", null));
+            }
+            
+            List<DraftMatchDto> matches = draftMatchService.getPublicDraftMatches(sportType, userDetails.getId());
+            
+            logger.info("[DRAFT_MATCH_WITH_USER_INFO] Successfully retrieved {} draft matches with user info for user {}", 
+                       matches.size(), userDetails.getId());
+            
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "Draft matches with user info retrieved successfully", matches)
+            );
+            
+        } catch (Exception e) {
+            logger.error("[DRAFT_MATCH_WITH_USER_INFO] Error retrieving draft matches with user info: {}", 
+                        e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(false, "Failed to retrieve draft matches with user info: " + e.getMessage(), null));
+        }
+    }
+
+    /**
      * Get ranked draft matches using AI
      * GET /api/draft-matches/ranked
      */

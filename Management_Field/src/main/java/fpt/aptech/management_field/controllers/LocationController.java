@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -33,6 +34,7 @@ public class LocationController {
     }
 
     @GetMapping
+    @Transactional(readOnly = true)
     @Operation(summary = "Get all locations for browsing", description = "Get a list of all football field locations for the main discovery page")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved all locations"),
@@ -51,6 +53,7 @@ public class LocationController {
     }
 
     @GetMapping("/map-data")
+    @Transactional(readOnly = true)
     @Operation(summary = "Get all locations for map", description = "Get a list of all locations with coordinates for displaying on the map")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved map data"),
@@ -67,6 +70,7 @@ public class LocationController {
     }
 
     @GetMapping("/map-search")
+    @Transactional(readOnly = true)
     @Operation(summary = "Search locations on map", description = "Get a list of locations in a geographic area to display markers on the map")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved locations"),
@@ -98,6 +102,7 @@ public class LocationController {
     }
 
     @GetMapping("/{locationId}/fields")
+    @Transactional(readOnly = true)
     @Operation(summary = "Get fields by location", description = "Get a list of fields available at a specific location")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved fields"),
@@ -130,6 +135,7 @@ public class LocationController {
     }
 
     @GetMapping("/{slug}")
+    @Transactional(readOnly = true)
     @Operation(summary = "Get location details by slug", description = "Get all details of a specific location by slug")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved location details"),
@@ -139,12 +145,17 @@ public class LocationController {
             @Parameter(description = "Location Slug", required = true)
             @PathVariable String slug) {
         try {
+            System.out.println("CONTROLLER: Getting location detail for slug: " + slug);
             LocationDetailResponse locationDetail = locationService.getLocationDetail(slug);
             if (locationDetail == null) {
+                System.out.println("CONTROLLER: Location detail is null for slug: " + slug);
                 return ResponseEntity.notFound().build();
             }
+            System.out.println("CONTROLLER: Successfully found location: " + locationDetail.getName());
             return ResponseEntity.ok(locationDetail);
         } catch (RuntimeException e) {
+            System.out.println("CONTROLLER: Exception occurred for slug " + slug + ": " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.notFound().build();
         }
     }

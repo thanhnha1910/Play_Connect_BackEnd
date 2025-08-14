@@ -29,6 +29,7 @@ public class FieldDetailResponse {
         private Long locationId;
         private String name;
         private String address;
+        private String description;
         private BigDecimal latitude;
         private BigDecimal longitude;
         private Long ownerId;
@@ -44,6 +45,10 @@ public class FieldDetailResponse {
         
         public void setAddress(String address) {
             this.address = address;
+        }
+        
+        public void setDescription(String description) {
+            this.description = description;
         }
         
         public void setLatitude(BigDecimal latitude) {

@@ -108,20 +108,25 @@ public class UserService {
             throw new BadCredentialsException("Current password is incorrect");
         }
 
-        // Step 2: Validate new password
+        // Step 2: Check if new password is same as current password
+        if (passwordEncoder.matches(request.getNewPassword(), currentUser.getPassword())) {
+            throw new IllegalArgumentException("New password must be different from current password");
+        }
+
+        // Step 3: Validate new password
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("New passwords do not match");
         }
 
-        // Step 3: Validate password complexity
+        // Step 4: Validate password complexity
         validatePasswordComplexity(request.getNewPassword());
 
-        // Step 4: Encode and save new password
+        // Step 5: Encode and save new password
         String encodedPassword = passwordEncoder.encode(request.getNewPassword());
         currentUser.setPassword(encodedPassword);
         userRepository.save(currentUser);
 
-        // Step 5: TODO - Invalidate existing refresh tokens for enhanced security
+        // Step 6: TODO - Invalidate existing refresh tokens for enhanced security
         // This would require implementing a token blacklist or refresh token repository
     }
 

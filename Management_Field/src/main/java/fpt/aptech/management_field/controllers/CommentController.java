@@ -24,14 +24,17 @@ public class CommentController {
     }
 
     @PostMapping()
-    public ResponseEntity<Comment> createComment(@RequestBody CommentRequest commentRequest, @RequestParam Long postId, @RequestParam Long userId) {
-        return ResponseEntity.ok(commentService.saveComment(commentRequest.getContent(), postId, userId));
+    public ResponseEntity<CommentResponse> createComment(@RequestBody CommentRequest commentRequest, @RequestParam Long postId, @RequestParam Long userId) {
+        Comment savedComment = commentService.saveComment(commentRequest.getContent(), postId, userId);
+        CommentResponse commentResponse = commentService.getCommentById(savedComment.getId(), userId);
+        return ResponseEntity.ok(commentResponse);
     }
 
     @PutMapping("/like")
-    public ResponseEntity<Void> likeComment(@RequestParam Long commentId, @RequestParam Long userId) {
+    public ResponseEntity<CommentResponse> likeComment(@RequestParam Long commentId, @RequestParam Long userId) {
         commentService.likeComment(commentId, userId);
-        return ResponseEntity.ok().build();
+        CommentResponse updatedComment = commentService.getCommentById(commentId, userId);
+        return ResponseEntity.ok(updatedComment);
     }
 
     @PostMapping("/reply")

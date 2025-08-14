@@ -51,6 +51,7 @@ public class TournamentService {
     @Autowired
     private UserRepository userRepository;
 
+    @Transactional(readOnly = true)
     public List<TournamentDto> getAllTournaments() {
         return tournamentRepository.findAll().stream()
                 .map(tournamentMapper::toDto)

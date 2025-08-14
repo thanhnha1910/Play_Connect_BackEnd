@@ -32,6 +32,10 @@ public class Location {
     
     @Column(columnDefinition = "NVARCHAR(MAX)")
     private String address;
+    
+    @Column(columnDefinition = "NVARCHAR(MAX)")
+    private String description;
+    
     private String city;
     private String country;
     

@@ -24,6 +24,9 @@ public class NotificationService {
     
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
+    
+    @Autowired
+    private EmailService emailService;
 
     public List<Notification> getNotificationsForUser(Long userId) {
         return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId);
@@ -118,6 +121,49 @@ public class NotificationService {
         
         return savedNotification;
     }
+
+    /**
+     * Create notification for tournament registration - sends both in-app and email notification
+     */
+    @Transactional
+    public Notification createTournamentRegistrationNotificationForOwner(User fieldOwner, String teamName, String tournamentName, String fieldName, Long tournamentId) {
+        // Create in-app notification
+        Notification notification = new Notification();
+        notification.setRecipient(fieldOwner);
+        notification.setTitle("Đội mới đăng ký giải đấu");
+        notification.setContent(String.format("Đội '%s' đã đăng ký và thanh toán thành công cho giải đấu '%s' tại sân %s.", teamName, tournamentName, fieldName));
+        notification.setType("TOURNAMENT_REGISTRATION");
+        notification.setRelatedEntityId(tournamentId);
+        notification.setCreatedAt(LocalDateTime.now());
+        notification.setIsRead(false);
+        
+        Notification savedNotification = createNotification(notification);
+        
+        // Send email notification
+        try {
+            String emailSubject = "Thông báo đăng ký giải đấu mới - " + tournamentName;
+            String emailContent = String.format(
+                "Xin chào %s,\n\n" +
+                "Có đội mới đăng ký giải đấu của bạn:\n" +
+                "- Tên đội: %s\n" +
+                "- Giải đấu: %s\n" +
+                "- Sân: %s\n\n" +
+                "Đội đã thanh toán thành công và được xác nhận tham gia.\n\n" +
+                "Trân trọng,\n" +
+                "Đội ngũ PlayerConnect",
+                fieldOwner.getFullName(),
+                teamName,
+                tournamentName,
+                fieldName
+            );
+            
+            emailService.sendEmail(fieldOwner.getEmail(), emailSubject, emailContent);
+        } catch (Exception e) {
+            System.err.println("Failed to send tournament registration email notification: " + e.getMessage());
+        }
+        
+        return savedNotification;
+    }
     
     /**
      * Smart notification creation method that understands invitation context
@@ -157,6 +203,138 @@ public class NotificationService {
         notification.setCreatedAt(LocalDateTime.now());
         
         return notificationRepository.save(notification);
+    }
+    
+    /**
+     * Create notification for new booking - sends both in-app and email notification
+     */
+    @Transactional
+    public Notification createBookingNotificationForOwner(User fieldOwner, String fieldName, String customerName, String bookingTime, Long bookingId) {
+        System.out.println("🔥 BOOKING NOTIFICATION DEBUG: Starting createBookingNotificationForOwner");
+        System.out.println("🔥 BOOKING NOTIFICATION DEBUG: Field Owner: " + fieldOwner.getFullName() + ", Email: " + fieldOwner.getEmail());
+        
+        try {
+            // Create in-app notification
+            Notification notification = new Notification();
+            notification.setRecipient(fieldOwner);
+            notification.setTitle("Đặt sân mới");
+            notification.setContent(String.format("%s đã đặt sân %s vào lúc %s.", customerName, fieldName, bookingTime));
+            notification.setType("NEW_BOOKING");
+            notification.setRelatedEntityId(bookingId);
+            notification.setCreatedAt(LocalDateTime.now());
+            notification.setIsRead(false);
+            
+            System.out.println("🔥 BOOKING NOTIFICATION DEBUG: About to call createNotification");
+            Notification savedNotification = createNotification(notification);
+            System.out.println("🔥 BOOKING NOTIFICATION DEBUG: Successfully created notification with ID: " + savedNotification.getId());
+            
+            // Send email notification
+            try {
+                System.out.println("🔥 BOOKING NOTIFICATION DEBUG: About to send email");
+                String emailSubject = "Thông báo đặt sân mới - " + fieldName;
+                String emailContent = String.format(
+                    "Xin chào %s,\n\n" +
+                    "Bạn có một đặt sân mới:\n" +
+                    "- Khách hàng: %s\n" +
+                    "- Sân: %s\n" +
+                    "- Thời gian: %s\n\n" +
+                    "Vui lòng kiểm tra hệ thống để xem chi tiết.\n\n" +
+                    "Trân trọng,\n" +
+                    "Đội ngũ PlayerConnect",
+                    fieldOwner.getFullName(),
+                    customerName,
+                    fieldName,
+                    bookingTime
+                );
+                
+                emailService.sendEmail(fieldOwner.getEmail(), emailSubject, emailContent);
+                System.out.println("🔥 BOOKING NOTIFICATION DEBUG: Email sent successfully");
+            } catch (Exception e) {
+                System.err.println("🔥 BOOKING NOTIFICATION DEBUG: Failed to send booking email notification: " + e.getMessage());
+                e.printStackTrace();
+            }
+            
+            System.out.println("🔥 BOOKING NOTIFICATION DEBUG: Completed successfully");
+            return savedNotification;
+        } catch (Exception e) {
+            System.err.println("🔥 BOOKING NOTIFICATION DEBUG: CRITICAL ERROR in createBookingNotificationForOwner: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
+    }
+    
+    /**
+     * Create notification for new tournament - sends both in-app and email notification
+     */
+    @Transactional
+    public Notification createTournamentNotificationForOwner(User fieldOwner, String tournamentName, String fieldName, String startDate, Long tournamentId) {
+        // Create in-app notification
+        Notification notification = new Notification();
+        notification.setRecipient(fieldOwner);
+        notification.setTitle("Giải đấu mới được tạo");
+        notification.setContent(String.format("Giải đấu '%s' đã được tạo tại sân %s, bắt đầu từ %s.", tournamentName, fieldName, startDate));
+        notification.setType("NEW_TOURNAMENT");
+        notification.setRelatedEntityId(tournamentId);
+        notification.setCreatedAt(LocalDateTime.now());
+        notification.setIsRead(false);
+        
+        Notification savedNotification = createNotification(notification);
+        
+        // Send email notification
+        try {
+            String emailSubject = "Thông báo giải đấu mới - " + tournamentName;
+            String emailContent = String.format(
+                "Xin chào %s,\n\n" +
+                "Một giải đấu mới đã được tạo tại sân của bạn:\n" +
+                "- Tên giải đấu: %s\n" +
+                "- Sân: %s\n" +
+                "- Ngày bắt đầu: %s\n\n" +
+                "Vui lòng kiểm tra hệ thống để quản lý giải đấu.\n\n" +
+                "Trân trọng,\n" +
+                "Đội ngũ PlayerConnect",
+                fieldOwner.getFullName(),
+                tournamentName,
+                fieldName,
+                startDate
+            );
+            
+            emailService.sendEmail(fieldOwner.getEmail(), emailSubject, emailContent);
+        } catch (Exception e) {
+            System.err.println("Failed to send tournament email notification: " + e.getMessage());
+        }
+        
+        return savedNotification;
+    }
+    
+    /**
+     * Create notification for review request after booking completion
+     */
+    @Transactional
+    public Notification createReviewNotificationForUser(User user, String fieldName, Long bookingId) {
+        System.out.println("🔥 REVIEW NOTIFICATION DEBUG: Starting createReviewNotificationForUser");
+        System.out.println("🔥 REVIEW NOTIFICATION DEBUG: User: " + user.getFullName() + ", Field: " + fieldName);
+        
+        try {
+            // Create in-app notification
+            Notification notification = new Notification();
+            notification.setRecipient(user);
+            notification.setTitle("Đánh giá sân");
+            notification.setContent(String.format("Bạn đã hoàn thành trận đấu tại %s. Hãy chia sẻ trải nghiệm của bạn!", fieldName));
+            notification.setType("REVIEW_REQUEST");
+            notification.setRelatedEntityId(bookingId);
+            notification.setCreatedAt(LocalDateTime.now());
+            notification.setIsRead(false);
+            
+            System.out.println("🔥 REVIEW NOTIFICATION DEBUG: About to call createNotification");
+            Notification savedNotification = createNotification(notification);
+            System.out.println("🔥 REVIEW NOTIFICATION DEBUG: Successfully created notification with ID: " + savedNotification.getId());
+            
+            return savedNotification;
+        } catch (Exception e) {
+            System.err.println("🔥 REVIEW NOTIFICATION DEBUG: CRITICAL ERROR in createReviewNotificationForUser: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
     
     /**

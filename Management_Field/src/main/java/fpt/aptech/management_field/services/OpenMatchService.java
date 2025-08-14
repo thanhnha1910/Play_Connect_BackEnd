@@ -3,7 +3,8 @@ package fpt.aptech.management_field.services;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fpt.aptech.management_field.services.AIRecommendationService;
+
+import fpt.aptech.management_field.services.UnifiedCompatibilityService;
 import fpt.aptech.management_field.models.Booking;
 import fpt.aptech.management_field.models.Invitation;
 import fpt.aptech.management_field.models.InvitationStatus;
@@ -47,10 +48,10 @@ public class OpenMatchService {
     @Autowired
     private InvitationRepository invitationRepository;
     
-    @Autowired
-    private AIRecommendationService aiRecommendationService;
-    
 
+    
+    @Autowired
+    private UnifiedCompatibilityService unifiedCompatibilityService;
     
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
@@ -130,7 +131,7 @@ public class OpenMatchService {
         List<OpenMatch> openMatches = openMatchRepository.findAllOpenMatches();
         
         if (userId != null) {
-            // Calculate compatibility scores using AIRecommendationService
+            // Calculate compatibility scores using UnifiedCompatibilityService
             Optional<User> userOpt = userRepository.findById(userId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
@@ -163,7 +164,7 @@ public class OpenMatchService {
         List<OpenMatch> openMatches = openMatchRepository.findOpenMatchesBySportType(sportType);
         
         if (userId != null) {
-            // Calculate compatibility scores using AIRecommendationService
+            // Calculate compatibility scores using UnifiedCompatibilityService
             Optional<User> userOpt = userRepository.findById(userId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
@@ -209,8 +210,8 @@ public class OpenMatchService {
             
             log.info("[RECOMMENDATION_RANKING] Found {} matches before recommendation ranking", matchDtos.size());
             
-            // Use recommendation service directly instead of AI ranking service
-            List<OpenMatchDto> rankedMatches = aiRecommendationService.fallbackRankOpenMatches(user, matchDtos, sportType);
+            // Use unified compatibility service for ranking
+            List<OpenMatchDto> rankedMatches = unifiedCompatibilityService.calculateOpenMatchCompatibility(user, matchDtos, sportType);
             
             log.info("[RECOMMENDATION_RANKING] Successfully ranked {} matches using recommendation service", rankedMatches.size());
             return rankedMatches;
@@ -586,9 +587,8 @@ public class OpenMatchService {
         try {
             log.info("[COMPATIBILITY_CALCULATION] Calculating compatibility scores for {} matches", matchDtos.size());
             
-            // Use AIRecommendationService to calculate compatibility scores
-            // This will set compatibility scores but won't sort by AI ranking
-            List<OpenMatchDto> matchesWithScores = aiRecommendationService.fallbackRankOpenMatches(user, matchDtos, sportType);
+            // Use UnifiedCompatibilityService for consistent scoring
+            List<OpenMatchDto> matchesWithScores = unifiedCompatibilityService.calculateOpenMatchCompatibility(user, matchDtos, sportType);
             
             log.info("[COMPATIBILITY_CALCULATION] Successfully calculated compatibility scores for {} matches", matchesWithScores.size());
             return matchesWithScores;

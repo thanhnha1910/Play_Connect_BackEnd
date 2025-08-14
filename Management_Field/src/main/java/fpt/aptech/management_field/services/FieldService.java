@@ -17,6 +17,7 @@ import fpt.aptech.management_field.repositories.BookingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -112,6 +113,7 @@ public class FieldService {
         locationInfo.setLocationId(field.getLocation().getLocationId());
         locationInfo.setName(field.getLocation().getName());
         locationInfo.setAddress(field.getLocation().getAddress());
+        locationInfo.setDescription(field.getLocation().getDescription());
         locationInfo.setLatitude(field.getLocation().getLatitude());
         locationInfo.setLongitude(field.getLocation().getLongitude());
         locationInfo.setOwnerId(field.getLocation().getOwner().getOwnerId());
@@ -160,6 +162,7 @@ public class FieldService {
     
     // Owner Field Management Methods
     
+    @Transactional
     public List<FieldSummaryDto> getFieldsForCurrentUser(User currentUser) {
         List<Field> fields = fieldRepository.findByLocation_Owner_User_Id(currentUser.getId());
         return fields.stream()
@@ -167,6 +170,7 @@ public class FieldService {
             .collect(Collectors.toList());
     }
     
+    @Transactional
     public FieldDetailDto getFieldDetails(Long fieldId, User currentUser) {
         Field field = fieldRepository.findById(fieldId)
             .orElseThrow(() -> new RuntimeException("Field not found with id: " + fieldId));
@@ -179,6 +183,7 @@ public class FieldService {
         return convertToFieldDetailDto(field);
     }
     
+    @Transactional
     public FieldDetailDto createField(UpsertFieldRequest request, User currentUser) {
         // Verify that the location belongs to the current user
         Location location = locationRepository.findById(request.getLocationId())
@@ -211,6 +216,7 @@ public class FieldService {
         return convertToFieldDetailDto(savedField);
     }
     
+    @Transactional
     public FieldDetailDto updateField(Long fieldId, UpsertFieldRequest request, User currentUser) {
         Field field = fieldRepository.findById(fieldId)
             .orElseThrow(() -> new RuntimeException("Field not found with id: " + fieldId));
@@ -272,6 +278,7 @@ public class FieldService {
             .collect(Collectors.toList());
     }
     
+    @Transactional
     public List<FieldSummaryDto> getFieldsByLocation(Long locationId, User currentUser) {
         // Verify location ownership
         Location location = locationRepository.findById(locationId)
@@ -323,6 +330,7 @@ public class FieldService {
         dto.setLocationId(location.getLocationId());
         dto.setName(location.getName());
         dto.setAddress(location.getAddress());
+        dto.setDescription(location.getDescription());
         dto.setCity(location.getCity());
         dto.setCountry(location.getCountry());
         dto.setThumbnailUrl(location.getThumbnailUrl());

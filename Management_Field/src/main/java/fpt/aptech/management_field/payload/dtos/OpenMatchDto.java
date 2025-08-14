@@ -34,6 +34,10 @@ public class OpenMatchDto {
     private Double compatibilityScore; // For AI ranking
     private Double explicitScore; // AI explicit score
     private Double implicitScore; // AI implicit score
+    private Double baseCompatibilityScore; // Base compatibility score for validation
+    private Double originalAIScore; // Original AI score before validation
+    private Boolean scoreValidated; // Whether score has been validated
+    private Boolean aiScoreUsed; // Whether AI score was used instead of fallback
     private List<Long> participantIds;
     private String currentUserJoinStatus; // NOT_JOINED, REQUEST_PENDING, JOINED
     
@@ -144,5 +148,25 @@ public class OpenMatchDto {
     
     public void setImplicitScore(Double implicitScore) {
         this.implicitScore = implicitScore;
+    }
+    
+    public void setBaseCompatibilityScore(Double baseCompatibilityScore) {
+        this.baseCompatibilityScore = baseCompatibilityScore;
+    }
+    
+    public void setOriginalAIScore(Double originalAIScore) {
+        this.originalAIScore = originalAIScore;
+    }
+    
+    public void setScoreValidated(Boolean scoreValidated) {
+        this.scoreValidated = scoreValidated;
+    }
+    
+    public Boolean getAiScoreUsed() {
+        return aiScoreUsed;
+    }
+    
+    public void setAiScoreUsed(Boolean aiScoreUsed) {
+        this.aiScoreUsed = aiScoreUsed;
     }
 }

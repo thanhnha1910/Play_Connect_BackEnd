@@ -8,8 +8,9 @@ import fpt.aptech.management_field.payload.response.MessageResponse;
 import fpt.aptech.management_field.payload.response.ApiResponse;
 import fpt.aptech.management_field.repositories.UserRepository;
 import fpt.aptech.management_field.security.services.UserDetailsImpl;
-import fpt.aptech.management_field.services.AIRecommendationService;
+
 import fpt.aptech.management_field.services.OpenMatchService;
+import fpt.aptech.management_field.services.UnifiedCompatibilityService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,8 +36,10 @@ public class OpenMatchController {
     @Autowired
     private OpenMatchService openMatchService;
     
+
+    
     @Autowired
-    private AIRecommendationService aiRecommendationService;
+    private UnifiedCompatibilityService unifiedCompatibilityService;
     
     @Autowired
     private UserRepository userRepository;
@@ -133,6 +136,50 @@ public class OpenMatchController {
         }
     }
     
+    /**
+     * Get open matches with user-specific information (authentication required)
+     * GET /api/open-matches/with-user-info
+     */
+    @GetMapping("/with-user-info")
+    @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<OpenMatchDto>>> getOpenMatchesWithUserInfo(
+            @RequestParam(required = false) String sportType) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        
+        try {
+            logger.info("[OPEN_MATCH_WITH_USER_INFO] User {} requesting open matches with user info for sport: {}", 
+                       userDetails.getId(), sportType);
+            
+            User currentUser = userRepository.findById(userDetails.getId()).orElse(null);
+            if (currentUser == null) {
+                logger.error("[OPEN_MATCH_WITH_USER_INFO] User {} not found", userDetails.getId());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(false, "User not found", null));
+            }
+            
+            List<OpenMatchDto> matches;
+            if (sportType != null && !sportType.isEmpty()) {
+                matches = openMatchService.getOpenMatchesBySport(sportType, userDetails.getId());
+            } else {
+                matches = openMatchService.getAllOpenMatches(userDetails.getId());
+            }
+            
+            logger.info("[OPEN_MATCH_WITH_USER_INFO] Successfully retrieved {} open matches with user info for user {}", 
+                       matches.size(), userDetails.getId());
+            
+            return ResponseEntity.ok(
+                new ApiResponse<>(true, "Open matches with user info retrieved successfully", matches)
+            );
+            
+        } catch (Exception e) {
+            logger.error("[OPEN_MATCH_WITH_USER_INFO] Error retrieving open matches with user info for user {}: {}", 
+                        userDetails.getId(), e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(false, "Failed to retrieve open matches with user info: " + e.getMessage(), null));
+        }
+    }
+
     @GetMapping("/ranked")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<OpenMatchDto>>> getRankedOpenMatches(
@@ -302,23 +349,18 @@ public class OpenMatchController {
             
             List<Map<String, Object>> recommendations;
             
-            // Always try to use AI service for real recommendations
+            // Use UnifiedCompatibilityService for teammate recommendations
             try {
-                // Try hybrid recommendation first, fallback to legacy if needed
-                try {
-                    recommendations = aiRecommendationService.recommendTeammatesHybrid(currentUser, potentialTeammates, finalSportType);
-                } catch (Exception hybridException) {
-                    recommendations = aiRecommendationService.recommendTeammates(currentUser, potentialTeammates, finalSportType);
-                }
+                recommendations = unifiedCompatibilityService.calculateTeammateCompatibility(currentUser, potentialTeammates, finalSportType);
                 
-                // Validate that AI service returned proper scores
+                // Validate that service returned proper scores
                 boolean hasValidScores = recommendations.stream()
                     .anyMatch(rec -> rec.containsKey("compatibilityScore") && 
                              rec.get("compatibilityScore") instanceof Number &&
                              ((Number) rec.get("compatibilityScore")).doubleValue() != 0.5);
                 
                 if (!hasValidScores) {
-                    throw new RuntimeException("AI service returned invalid or mock scores");
+                    throw new RuntimeException("Unified compatibility service returned invalid or mock scores");
                 }
                 
                 // Filter out low compatibility scores
@@ -336,9 +378,9 @@ public class OpenMatchController {
                 
             } catch (Exception e) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
-                    "error", "AI recommendation service is currently unavailable",
+                    "error", "Unified compatibility service is currently unavailable",
                     "details", e.getMessage(),
-                    "aiServiceAvailable", false
+                    "serviceAvailable", false
                 ));
             }
             
@@ -346,7 +388,7 @@ public class OpenMatchController {
                 "sportType", finalSportType,
                 "recommendations", recommendations,
                 "totalRecommendations", recommendations.size(),
-                "aiServiceAvailable", aiRecommendationService.isAIServiceAvailable(),
+                "serviceAvailable", true,
                 "message", "Teammate recommendations retrieved successfully"
             ));
             

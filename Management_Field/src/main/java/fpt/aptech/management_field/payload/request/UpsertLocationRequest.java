@@ -14,6 +14,8 @@ public class UpsertLocationRequest {
     @NotBlank(message = "Address is required")
     private String address;
     
+    private String description;
+    
     @NotNull(message = "Latitude is required")
     private BigDecimal latitude;
     
@@ -31,6 +33,10 @@ public class UpsertLocationRequest {
     
     public String getAddress() {
         return address;
+    }
+    
+    public String getDescription() {
+        return description;
     }
     
     public BigDecimal getLatitude() {

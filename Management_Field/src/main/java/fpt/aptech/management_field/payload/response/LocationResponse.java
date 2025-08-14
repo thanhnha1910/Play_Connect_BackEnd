@@ -10,6 +10,7 @@ public class LocationResponse {
     private String name;
     private String slug;
     private String address;
+    private String description;
     private BigDecimal latitude;
     private BigDecimal longitude;
     private String thumbnailUrl;
@@ -31,6 +32,10 @@ public class LocationResponse {
     
     public void setAddress(String address) {
         this.address = address;
+    }
+    
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     public void setLatitude(BigDecimal latitude) {

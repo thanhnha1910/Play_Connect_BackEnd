@@ -9,17 +9,22 @@ import fpt.aptech.management_field.security.services.UserDetailsImpl;
 import fpt.aptech.management_field.services.BookingService;
 import fpt.aptech.management_field.services.FieldService;
 import fpt.aptech.management_field.services.PayPalPaymentService;
-import fpt.aptech.management_field.services.AIRecommendationService;
+
+import fpt.aptech.management_field.services.UnifiedCompatibilityService;
 import fpt.aptech.management_field.repositories.UserRepository;
+import fpt.aptech.management_field.repositories.FieldRepository;
+import fpt.aptech.management_field.repositories.BookingRepository;
 import org.slf4j.Logger;
 import java.util.stream.Collectors;
 import org.slf4j.LoggerFactory;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import fpt.aptech.management_field.models.Field;
 import fpt.aptech.management_field.payload.request.BookingRequest;
+import fpt.aptech.management_field.payload.request.BatchBookingRequest;
 import fpt.aptech.management_field.payload.response.MessageResponse;
 
 import jakarta.validation.Valid;
@@ -53,17 +58,44 @@ public class BookingController {
     @Autowired
     private BookingMapper bookingMapper;
 
+
+
     @Autowired
-    private AIRecommendationService aiRecommendationService;
+    private UnifiedCompatibilityService unifiedCompatibilityService;
 
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private FieldRepository fieldRepository;
+    
+    @Autowired
+    private BookingRepository bookingRepository;
+
+    @Autowired
+    private fpt.aptech.management_field.services.UserService userService;
 
     @GetMapping("/{fieldId}")
     public ResponseEntity<List<BookingDTO>> getBookingsForFieldByDate(@PathVariable("fieldId") Long fieldId, @RequestParam Instant fromDate, @RequestParam Instant toDate) {
         List<BookingDTO> bookingDTOS = bookingService.getBookingsByDate(fromDate, toDate, fieldId);
         return ResponseEntity.ok(bookingDTOS);
     }
+
+    @PostMapping("/batch")
+    @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
+    public ResponseEntity<?> createBatchBooking(@Valid @RequestBody BatchBookingRequest batchRequest, Authentication authentication) {
+        try {
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            Long userId = userDetails.getId();
+
+            Map<String, Object> result = bookingService.createBatchBooking(userId, batchRequest);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Error: " + e.getMessage()));
+        }
+    }
+
     @GetMapping("/available-fields")
     public ResponseEntity<?> getAvailableFields(
             @RequestParam Instant fromTime,
@@ -408,12 +440,33 @@ public class BookingController {
                 ));
             }
 
-            // Convert to DTO to avoid Hibernate proxy serialization issues
-            BookingReceiptDTO receiptDTO = bookingMapper.mapToReceiptDTO(booking);
-            return ResponseEntity.ok(Map.of(
-                "booking", receiptDTO,
-                "message", "Booking receipt retrieved successfully"
-            ));
+            // Check if this booking is part of a batch (created within 5 minutes of other bookings)
+            List<Booking> relatedBookings = bookingService.getRelatedBatchBookings(bookingId);
+            
+            if (relatedBookings.size() > 1) {
+                // This is a batch booking, return batch receipt
+                return ResponseEntity.ok(Map.of(
+                    "bookings", relatedBookings.stream().map(bookingMapper::mapToReceiptDTO).collect(Collectors.toList()),
+                    "totalBookings", relatedBookings.size(),
+                    "totalAmount", relatedBookings.stream().mapToDouble(b -> {
+                        long hours = Duration.between(b.getFromTime(), b.getToTime()).toHours();
+                        float basePrice = b.getField().getHourlyRate() * hours;
+                        Integer memberLevel = b.getUser().getMemberLevel();
+                        int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
+                        return basePrice * (1 - discountPercent / 100.0);
+                    }).sum(),
+                    "isBatch", true,
+                    "message", "Batch booking receipt retrieved successfully"
+                ));
+            } else {
+                // Single booking
+                BookingReceiptDTO receiptDTO = bookingMapper.mapToReceiptDTO(booking);
+                return ResponseEntity.ok(Map.of(
+                    "booking", receiptDTO,
+                    "isBatch", false,
+                    "message", "Booking receipt retrieved successfully"
+                ));
+            }
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
                 "error", "Failed to fetch booking receipt: " + e.getMessage(),
@@ -498,25 +551,19 @@ public class BookingController {
             
             List<Map<String, Object>> recommendations;
             
-            // Always try to use AI service for real recommendations
+            // Use UnifiedCompatibilityService for teammate recommendations
             try {
-                // Try hybrid recommendation first, fallback to legacy if needed
-                try {
-                    recommendations = aiRecommendationService.recommendTeammatesHybrid(currentUser, potentialTeammates, sportType);
-                    logger.info("Using hybrid recommendation model for booking {}", bookingId);
-                } catch (Exception hybridException) {
-                    logger.warn("Hybrid recommendation failed for booking {}, falling back to legacy: {}", bookingId, hybridException.getMessage());
-                    recommendations = aiRecommendationService.recommendTeammates(currentUser, potentialTeammates, sportType);
-                }
+                recommendations = unifiedCompatibilityService.calculateTeammateCompatibility(currentUser, potentialTeammates, sportType);
+                logger.info("Using unified compatibility service for booking {}", bookingId);
                 
-                // Validate that AI service returned proper scores
+                // Validate that service returned proper scores
                 boolean hasValidScores = recommendations.stream()
                     .anyMatch(rec -> rec.containsKey("compatibilityScore") && 
                              rec.get("compatibilityScore") instanceof Number &&
                              ((Number) rec.get("compatibilityScore")).doubleValue() != 0.5);
                 
                 if (!hasValidScores) {
-                    throw new RuntimeException("AI service returned invalid or mock scores");
+                    throw new RuntimeException("Unified compatibility service returned invalid or mock scores");
                 }
 
                 // --- FILTER OUT LOW COMPATIBILITY SCORES ---
@@ -536,12 +583,12 @@ public class BookingController {
                 // --- END OF FILTERING LOGIC ---
 
             } catch (Exception e) {
-                logger.error("AI service failed, returning error instead of mock data: {}", e.getMessage());
+                logger.error("Unified compatibility service failed, returning error: {}", e.getMessage());
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
-                    "error", "AI recommendation service is currently unavailable",
+                    "error", "Unified compatibility service is currently unavailable",
                     "details", e.getMessage(),
                     "bookingId", bookingId,
-                    "aiServiceAvailable", false
+                    "serviceAvailable", false
                 ));
             }
             
@@ -550,7 +597,7 @@ public class BookingController {
                 "sportType", sportType,
                 "recommendations", recommendations,
                 "totalRecommendations", recommendations.size(),
-                "aiServiceAvailable", aiRecommendationService.isAIServiceAvailable(),
+                "serviceAvailable", true,
                 "message", "Teammate recommendations retrieved successfully"
             ));
             
@@ -596,4 +643,26 @@ public class BookingController {
             ));
         }
     }
+
+
+@GetMapping("/check-availability")
+public ResponseEntity<?> checkAvailability(
+        @RequestParam Long fieldId,
+        @RequestParam String fromTime,
+        @RequestParam String toTime) {
+    try {
+        Field field = fieldRepository.findById(fieldId)
+                .orElseThrow(() -> new RuntimeException("Field not found"));
+        
+        Instant from = Instant.parse(fromTime);
+        Instant to = Instant.parse(toTime);
+        
+        boolean isAvailable = !bookingRepository
+                .existsByFieldAndFromTimeLessThanEqualAndToTimeGreaterThanEqual(field, to, from);
+        
+        return ResponseEntity.ok(Map.of("available", isAvailable));
+    } catch (Exception e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
+}
 }

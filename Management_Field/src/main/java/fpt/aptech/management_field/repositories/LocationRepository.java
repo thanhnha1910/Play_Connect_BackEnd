@@ -48,9 +48,13 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
     // Find locations by owner's user ID
     List<Location> findByOwner_User_Id(Long userId);
     
+    // Find location by ID with owner eagerly loaded to avoid LazyInitializationException
+    @Query("SELECT l FROM Location l JOIN FETCH l.owner o JOIN FETCH o.user WHERE l.locationId = :locationId")
+    java.util.Optional<Location> findByIdWithOwner(@Param("locationId") Long locationId);
+    
     // Get average rating for a location (returns null if table doesn't exist)
     @Query(value = "SELECT CASE WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'location_reviews') " +
-           "THEN (SELECT AVG(CAST(lr.rating AS DECIMAL(3,2))) FROM location_reviews lr WHERE lr.location_id = :locationId) " +
+           "THEN (SELECT AVG(CAST(lr.average_rating AS DECIMAL(3,2))) FROM location_reviews lr WHERE lr.location_id = :locationId) " +
            "ELSE NULL END",
            nativeQuery = true)
     BigDecimal getAverageRatingByLocationId(@Param("locationId") Long locationId);
@@ -74,8 +78,8 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
     // Find all locations sorted by average rating (highest first)
     @Query("SELECT l FROM Location l " +
            "LEFT JOIN LocationReview lr ON l.locationId = lr.location.locationId " +
-           "GROUP BY l.locationId, l.name, l.address, l.city, l.country, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
-           "ORDER BY AVG(lr.rating) DESC NULLS LAST")
+           "GROUP BY l.locationId, l.name, l.address, l.description, l.city, l.country, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
+           "ORDER BY AVG(lr.averageRating) DESC NULLS LAST")
     List<Location> findAllSortedByRating();
     
     // Find all locations sorted by booking count in last 30 days (most popular first)
@@ -83,7 +87,7 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
            "LEFT JOIN Field f ON l.locationId = f.location.locationId " +
            "LEFT JOIN Booking b ON f.fieldId = b.field.fieldId " +
            "AND b.fromTime > :thirtyDaysAgo " +
-           "GROUP BY l.locationId, l.name, l.address, l.city, l.country, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
+           "GROUP BY l.locationId, l.name, l.address, l.description, l.city, l.country, l.latitude, l.longitude, l.slug, l.owner, l.thumbnailUrl, l.imageGallery " +
            "ORDER BY COUNT(b.bookingId) DESC")
     List<Location> findAllSortedByPopularity(@Param("thirtyDaysAgo") java.time.Instant thirtyDaysAgo);
     

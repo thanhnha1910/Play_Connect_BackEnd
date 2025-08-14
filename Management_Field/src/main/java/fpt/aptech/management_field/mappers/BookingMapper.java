@@ -36,7 +36,8 @@ public class BookingMapper {
         }
         
         // Set isBooked based on status (both confirmed and pending are considered booked)
-        bookingDTO.setBooked("CONFIRMED".equals(booking.getStatus()) || "PENDING".equals(booking.getStatus()));
+        String status = booking.getStatus();
+        bookingDTO.setBooked("confirmed".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status));
         
         return bookingDTO;
     }

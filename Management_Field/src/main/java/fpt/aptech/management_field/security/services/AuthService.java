@@ -5,12 +5,15 @@ import fpt.aptech.management_field.payload.request.OwnerRegistrationRequest;
 import fpt.aptech.management_field.repositories.OwnerRepository;
 import fpt.aptech.management_field.repositories.RoleRepository;
 import fpt.aptech.management_field.repositories.UserRepository;
+import fpt.aptech.management_field.services.NotificationService;
+import fpt.aptech.management_field.services.EmailService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
 @Service
 public class AuthService {
     
@@ -18,15 +21,21 @@ public class AuthService {
     private final OwnerRepository ownerRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder encoder;
+    private final NotificationService notificationService;
+    private final EmailService emailService;
     
     public AuthService(UserRepository userRepository, 
                       OwnerRepository ownerRepository,
                       RoleRepository roleRepository, 
-                      PasswordEncoder encoder) {
+                      PasswordEncoder encoder,
+                      NotificationService notificationService,
+                      EmailService emailService) {
         this.userRepository = userRepository;
         this.ownerRepository = ownerRepository;
         this.roleRepository = roleRepository;
         this.encoder = encoder;
+        this.notificationService = notificationService;
+        this.emailService = emailService;
     }
     
     @Transactional
@@ -70,6 +79,56 @@ public class AuthService {
         owner.setBusinessName(request.getBusinessName());
         owner.setUser(savedUser);
         ownerRepository.save(owner);
+        
+        // Send notifications to all admins
+        try {
+            List<User> adminUsers = userRepository.findByRoles_Name(ERole.ROLE_ADMIN);
+            
+            for (User admin : adminUsers) {
+                // Create in-app notification
+                Notification notification = new Notification();
+                notification.setRecipient(admin);
+                notification.setTitle("Yêu cầu đối tác mới");
+                notification.setContent("Có yêu cầu đối tác mới từ " + savedUser.getFullName() + " (" + request.getBusinessName() + ") cần được duyệt.");
+                notification.setType("OWNER_REGISTRATION");
+                notification.setRelatedEntityId(savedUser.getId());
+                notification.setCreatedAt(java.time.LocalDateTime.now());
+                notification.setIsRead(false);
+                
+                notificationService.createNotification(notification);
+                
+                // Send email notification to admin
+                String subject = "Yêu cầu đối tác mới cần duyệt - PlayerConnect";
+                String content = "Xin chào,\n\n" +
+                               "Có yêu cầu đối tác mới cần được duyệt:\n\n" +
+                               "Tên: " + savedUser.getFullName() + "\n" +
+                               "Email: " + savedUser.getEmail() + "\n" +
+                               "Tên doanh nghiệp: " + request.getBusinessName() + "\n" +
+                               "Số điện thoại: " + savedUser.getPhoneNumber() + "\n" +
+                               "Địa chỉ: " + savedUser.getAddress() + "\n\n" +
+                               "Vui lòng đăng nhập vào hệ thống admin để duyệt yêu cầu này.\n\n" +
+                               "Trân trọng,\nHệ thống PlayerConnect";
+                
+                emailService.sendEmail(admin.getEmail(), subject, content);
+            }
+            
+            // Send confirmation email to owner
+            String ownerSubject = "Yêu cầu đối tác đã được gửi thành công - PlayerConnect";
+            String ownerContent = "Xin chào " + savedUser.getFullName() + ",\n\n" +
+                                "Cảm ơn bạn đã đăng ký trở thành đối tác của PlayerConnect!\n\n" +
+                                "Thông tin đăng ký của bạn:\n" +
+                                "Tên doanh nghiệp: " + request.getBusinessName() + "\n" +
+                                "Email: " + savedUser.getEmail() + "\n\n" +
+                                "Yêu cầu của bạn đang được xem xét và sẽ được phản hồi trong thời gian sớm nhất.\n" +
+                                "Chúng tôi sẽ thông báo kết quả qua email này.\n\n" +
+                                "Trân trọng,\nĐội ngũ PlayerConnect";
+            
+            emailService.sendEmail(savedUser.getEmail(), ownerSubject, ownerContent);
+            
+        } catch (Exception e) {
+            // Log error but don't fail the registration process
+            System.err.println("Failed to send notifications: " + e.getMessage());
+        }
         
         return savedUser;
     }

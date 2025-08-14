@@ -847,6 +847,100 @@ public class AIRecommendationService {
     }
     
     /**
+     * Rank open matches using hybrid AI scoring
+     */
+    @Retryable(value = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
+    public List<OpenMatchDto> rankOpenMatchesHybrid(User user, List<OpenMatchDto> matches, String sportType) {
+        try {
+            logger.info("[HYBRID_RANKING] Ranking {} open matches for user {} with sport {}", 
+                       matches.size(), user.getId(), sportType);
+            
+            if (matches == null || matches.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            // Create hybrid payload
+            Map<String, Object> payload = createHybridMatchPayload(user, matches, sportType);
+            
+            // Call AI service
+            String url = aiServiceBaseUrl + "/api/v1/rank/matches";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            
+            ResponseEntity<List> response = restTemplate.postForEntity(url, request, List.class);
+            
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                List<Map<String, Object>> rankedMatches = (List<Map<String, Object>>) response.getBody();
+                List<OpenMatchDto> result = convertRankedOpenMatches(rankedMatches);
+                
+                // Only fallback if conversion completely fails (null), not if AI returns empty list or low scores
+                if (result != null) {
+                    logger.info("[HYBRID_RANKING] Successfully received {} ranked open matches from AI service", result.size());
+                    return result;
+                } else {
+                    logger.warn("[HYBRID_RANKING] AI service returned valid response but conversion failed for open matches");
+                    return fallbackRankOpenMatches(user, matches, sportType);
+                }
+            } else {
+                logger.warn("[HYBRID_RANKING] AI service returned invalid response (status: {}) for open matches", response.getStatusCode());
+                return fallbackRankOpenMatches(user, matches, sportType);
+            }
+            
+        } catch (Exception e) {
+            logger.error("[HYBRID_RANKING] Error ranking open matches: {}", e.getMessage(), e);
+            return fallbackRankOpenMatches(user, matches, sportType);
+        }
+    }
+    
+    /**
+     * Rank draft matches using hybrid AI scoring
+     */
+    @Retryable(value = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
+    public List<DraftMatchDto> rankDraftMatchesHybrid(User user, List<DraftMatchDto> matches, String sportType) {
+        try {
+            logger.info("[HYBRID_RANKING] Ranking {} draft matches for user {} with sport {}", 
+                       matches.size(), user.getId(), sportType);
+            
+            if (matches == null || matches.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            // Create hybrid payload
+            Map<String, Object> payload = createHybridDraftMatchPayload(user, matches, sportType);
+            
+            // Call AI service
+            String url = aiServiceBaseUrl + "/api/v1/rank/draft-matches";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            
+            ResponseEntity<List> response = restTemplate.postForEntity(url, request, List.class);
+            
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                List<Map<String, Object>> rankedMatches = (List<Map<String, Object>>) response.getBody();
+                List<DraftMatchDto> result = convertRankedDraftMatches(rankedMatches);
+                
+                // Only fallback if conversion completely fails (null), not if AI returns empty list or low scores
+                if (result != null) {
+                    logger.info("[HYBRID_RANKING] Successfully received {} ranked draft matches from AI service", result.size());
+                    return result;
+                } else {
+                    logger.warn("[HYBRID_RANKING] AI service returned valid response but conversion failed for draft matches");
+                    return fallbackRankDraftMatches(user, matches, sportType);
+                }
+            } else {
+                logger.warn("[HYBRID_RANKING] AI service returned invalid response (status: {}) for draft matches", response.getStatusCode());
+                return fallbackRankDraftMatches(user, matches, sportType);
+            }
+            
+        } catch (Exception e) {
+            logger.error("[HYBRID_RANKING] Error ranking draft matches: {}", e.getMessage(), e);
+            return fallbackRankDraftMatches(user, matches, sportType);
+        }
+    }
+    
+    /**
      * Check if AI service is available
      */
     public boolean isAIServiceAvailable() {
@@ -858,6 +952,146 @@ public class AIRecommendationService {
             logger.warn("AI service health check failed: {}", e.getMessage());
             return false;
         }
+    }
+    
+    /**
+     * Create hybrid payload for open matches ranking
+     */
+    private Map<String, Object> createHybridMatchPayload(User user, List<OpenMatchDto> matches, String sportType) {
+        Map<String, Object> payload = new HashMap<>();
+        
+        // Add current user data
+        payload.put("currentUser", createCurrentUserData(user, sportType));
+        
+        // Convert matches to the format expected by AI service
+        List<Map<String, Object>> matchesData = new ArrayList<>();
+        for (OpenMatchDto match : matches) {
+            Map<String, Object> matchData = new HashMap<>();
+            matchData.put("id", match.getId());
+            matchData.put("sportType", match.getSportType());
+            matchData.put("location", match.getLocationAddress());
+            matchData.put("difficulty", "INTERMEDIATE"); // Default difficulty for open matches
+            matchData.put("explicitTags", match.getRequiredTags() != null ? match.getRequiredTags() : new ArrayList<>());
+            matchData.put("implicitTags", new ArrayList<>()); // Can be enhanced later
+            matchesData.add(matchData);
+        }
+        payload.put("matches", matchesData);
+        
+        logger.info("[HYBRID_RANKING] Created payload for {} open matches", matches.size());
+        return payload;
+    }
+    
+    /**
+     * Create hybrid payload for draft matches ranking
+     */
+    private Map<String, Object> createHybridDraftMatchPayload(User user, List<DraftMatchDto> matches, String sportType) {
+        Map<String, Object> payload = new HashMap<>();
+        
+        // Add current user data
+        payload.put("currentUser", createCurrentUserData(user, sportType));
+        
+        // Convert draft matches to the format expected by AI service
+        List<Map<String, Object>> matchesData = new ArrayList<>();
+        for (DraftMatchDto match : matches) {
+            Map<String, Object> matchData = new HashMap<>();
+            matchData.put("id", match.getId());
+            matchData.put("sportType", match.getSportType());
+            matchData.put("location", match.getLocationDescription());
+            matchData.put("difficulty", match.getSkillLevel());
+            matchData.put("explicitTags", match.getRequiredTags() != null ? match.getRequiredTags() : new ArrayList<>());
+            matchData.put("implicitTags", new ArrayList<>()); // Can be enhanced later
+            matchesData.add(matchData);
+        }
+        payload.put("draft_matches", matchesData);
+        
+        logger.info("[HYBRID_RANKING] Created payload for {} draft matches", matches.size());
+        return payload;
+    }
+    
+    /**
+     * Convert ranked open matches from AI service response
+     */
+    private List<OpenMatchDto> convertRankedOpenMatches(List<Map<String, Object>> rankedMatches) {
+        List<OpenMatchDto> result = new ArrayList<>();
+        
+        for (Map<String, Object> matchData : rankedMatches) {
+            OpenMatchDto dto = new OpenMatchDto();
+            
+            // Set basic fields
+            if (matchData.get("id") != null) {
+                dto.setId(Long.valueOf(matchData.get("id").toString()));
+            }
+            if (matchData.get("sportType") != null) {
+                dto.setSportType(matchData.get("sportType").toString());
+            }
+            if (matchData.get("location") != null) {
+                dto.setLocationAddress(matchData.get("location").toString());
+            }
+            // Note: OpenMatchDto doesn't have difficulty field
+            
+            // Set AI scores
+            if (matchData.get("compatibilityScore") != null) {
+                dto.setCompatibilityScore(Double.valueOf(matchData.get("compatibilityScore").toString()));
+            }
+            if (matchData.get("explicitScore") != null) {
+                dto.setExplicitScore(Double.valueOf(matchData.get("explicitScore").toString()));
+            }
+            if (matchData.get("implicitScore") != null) {
+                dto.setImplicitScore(Double.valueOf(matchData.get("implicitScore").toString()));
+            }
+            
+            // Mark that AI score was used
+            dto.setAiScoreUsed(true);
+            
+            result.add(dto);
+        }
+        
+        logger.info("[HYBRID_RANKING] Converted {} ranked open matches", result.size());
+        return result;
+    }
+    
+    /**
+     * Convert ranked draft matches from AI service response
+     */
+    private List<DraftMatchDto> convertRankedDraftMatches(List<Map<String, Object>> rankedMatches) {
+        List<DraftMatchDto> result = new ArrayList<>();
+        
+        for (Map<String, Object> matchData : rankedMatches) {
+            DraftMatchDto dto = new DraftMatchDto();
+            
+            // Set basic fields
+            if (matchData.get("id") != null) {
+                dto.setId(Long.valueOf(matchData.get("id").toString()));
+            }
+            if (matchData.get("sportType") != null) {
+                dto.setSportType(matchData.get("sportType").toString());
+            }
+            if (matchData.get("location") != null) {
+                dto.setLocationDescription(matchData.get("location").toString());
+            }
+            if (matchData.get("difficulty") != null) {
+                dto.setSkillLevel(matchData.get("difficulty").toString());
+            }
+            
+            // Set AI scores
+            if (matchData.get("compatibilityScore") != null) {
+                dto.setCompatibilityScore(Double.valueOf(matchData.get("compatibilityScore").toString()));
+            }
+            if (matchData.get("explicitScore") != null) {
+                dto.setExplicitScore(Double.valueOf(matchData.get("explicitScore").toString()));
+            }
+            if (matchData.get("implicitScore") != null) {
+                dto.setImplicitScore(Double.valueOf(matchData.get("implicitScore").toString()));
+            }
+            
+            // Mark that AI score was used
+            dto.setAiScoreUsed(true);
+            
+            result.add(dto);
+        }
+        
+        logger.info("[HYBRID_RANKING] Converted {} ranked draft matches", result.size());
+        return result;
     }
     
     /**
