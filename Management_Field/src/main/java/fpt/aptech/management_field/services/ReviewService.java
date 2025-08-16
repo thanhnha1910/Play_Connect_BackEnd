@@ -137,7 +137,84 @@ public class ReviewService {
     
     public List<ReviewResponse> getOwnerFieldReviews(Long ownerId) {
         List<Review> reviews = reviewRepository.findReviewsForOwnerFields(ownerId);
-        return reviews.stream().map(this::mapToResponse).collect(Collectors.toList());
+        
+        // Debug logs để kiểm tra location information
+        System.out.println("=== OWNER FIELD REVIEWS DEBUG ===");
+        System.out.println("Owner ID: " + ownerId);
+        System.out.println("Total reviews found: " + reviews.size());
+        
+        for (int i = 0; i < reviews.size(); i++) {
+            Review review = reviews.get(i);
+            System.out.println("Review " + (i + 1) + ":");
+            System.out.println("  - Review ID: " + review.getReviewId());
+            System.out.println("  - Field ID: " + review.getField().getFieldId());
+            System.out.println("  - Field Name: " + review.getField().getName());
+            System.out.println("  - Location ID: " + review.getField().getLocation().getLocationId());
+            System.out.println("  - Location Name: " + review.getField().getLocation().getName());
+            System.out.println("  - User: " + review.getUser().getFullName());
+            System.out.println("  - Rating: " + review.getRating());
+        }
+        
+        List<ReviewResponse> responses = reviews.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+                
+        // Debug unique locations
+        long uniqueLocations = responses.stream()
+                .map(ReviewResponse::getLocationName)
+                .distinct()
+                .count();
+        System.out.println("Unique locations in responses: " + uniqueLocations);
+        responses.stream()
+                .map(ReviewResponse::getLocationName)
+                .distinct()
+                .forEach(locationName -> System.out.println("  - " + locationName));
+        System.out.println("=== END OWNER FIELD REVIEWS DEBUG ===");
+        
+        return responses;
+    }
+    
+    public List<ReviewResponse> getReviewsByLocation(Long locationId) {
+        List<Review> reviews = reviewRepository.findByFieldLocationId(locationId);
+        return reviews.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+    
+    @Transactional
+    public ReviewResponse replyToReview(Long reviewId, Long ownerId, String reply) {
+        // Find the review
+        Review review = reviewRepository.findById(reviewId)
+            .orElseThrow(() -> new RuntimeException("Review not found"));
+        
+        // Validate that the owner owns the field being reviewed
+        if (!review.getField().getLocation().getOwner().getUser().getId().equals(ownerId)) {
+            throw new RuntimeException("You can only reply to reviews of your own fields");
+        }
+        
+        // Update the review with owner reply
+        review.setOwnerReply(reply);
+        review.setOwnerReplyAt(LocalDateTime.now());
+        review.setUpdatedAt(LocalDateTime.now());
+        
+        Review savedReview = reviewRepository.save(review);
+        
+        // Send notification to the reviewer
+        String message = String.format("Owner replied to your review for %s", 
+            review.getField().getName());
+        
+        Notification notification = new Notification();
+        notification.setRecipient(review.getUser());
+        notification.setType("OWNER_REPLY");
+        notification.setTitle("Owner Reply");
+        notification.setContent(message);
+        notification.setRelatedEntityId(savedReview.getReviewId());
+        notification.setIsRead(false);
+        notification.setCreatedAt(LocalDateTime.now());
+        
+        notificationService.createNotification(notification);
+        
+        return mapToResponse(savedReview);
     }
     
     private ReviewResponse mapToResponse(Review review) {
@@ -148,9 +225,13 @@ public class ReviewService {
             review.getUser().getProfilePicture(),
             review.getField().getFieldId(),
             review.getField().getName(),
+            review.getField().getLocation().getLocationId(),
+            review.getField().getLocation().getName(),
             review.getBooking().getBookingId(),
             review.getRating(),
             review.getComment(),
+            review.getOwnerReply(),
+            review.getOwnerReplyAt(),
             review.getCreatedAt(),
             review.getUpdatedAt()
         );
