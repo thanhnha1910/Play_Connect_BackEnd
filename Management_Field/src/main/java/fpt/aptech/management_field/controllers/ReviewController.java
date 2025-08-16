@@ -73,4 +73,25 @@ public class ReviewController {
         List<ReviewResponse> reviews = reviewService.getOwnerFieldReviews(userDetails.getId());
         return ResponseEntity.ok(reviews);
     }
+    
+    @GetMapping("/location/{locationId}")
+    public ResponseEntity<List<ReviewResponse>> getReviewsByLocation(@PathVariable Long locationId) {
+        List<ReviewResponse> reviews = reviewService.getReviewsByLocation(locationId);
+        return ResponseEntity.ok(reviews);
+    }
+    
+    @PostMapping("/{reviewId}/reply")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<?> replyToReview(@PathVariable Long reviewId,
+                                          @RequestBody String reply,
+                                          Authentication authentication) {
+        try {
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            ReviewResponse updatedReview = reviewService.replyToReview(reviewId, userDetails.getId(), reply);
+            return ResponseEntity.ok(updatedReview);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(new MessageResponse("Error: " + e.getMessage()));
+        }
+    }
 }

@@ -49,14 +49,15 @@ public class ChatRoomService {
         if (name == null || name.trim().isEmpty() || name.length() < 3) {
             throw new RuntimeException("Tên phòng chat phải có ít nhất 3 ký tự");
         }
-        if (chatRoomRepository.findByName(name).isPresent()) {
-            throw new RuntimeException("Tên phòng chat đã tồn tại");
-        }
+        
+        // Tự động tạo tên unique nếu tên đã tồn tại
+        String uniqueName = generateUniqueChatRoomName(name);
+        
         User creator = userRepository.findById(creatorUserId)
                 .orElseThrow(() -> new RuntimeException("Người dùng không tồn tại"));
 
         ChatRoom chatRoom = new ChatRoom();
-        chatRoom.setName(name);
+        chatRoom.setName(uniqueName);
         chatRoom.setCreatedAt(LocalDateTime.now());
 
         // Lưu ChatRoom trước
@@ -159,7 +160,6 @@ public class ChatRoomService {
     public void removeMember(Long chatRoomId, Long userIdToRemove, Long creatorUserId) {
         ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng chat"));
-
         // Kiểm tra quyền creator (người tạo nhóm)
         Optional<ChatMember> creatorMember = chatMemberRepository.findByChatRoomIdAndUserId(chatRoomId, creatorUserId);
         if (creatorMember.isEmpty() || !creatorMember.get().isCreator()) {
@@ -236,6 +236,16 @@ public class ChatRoomService {
 
     @Transactional
     public ChatMessage sendMessage(Long chatRoomId, Long userId, String content) {
+        // Validation cho content
+        if (content == null || content.trim().isEmpty()) {
+            throw new RuntimeException("Nội dung tin nhắn không được để trống");
+        }
+        
+        // Giới hạn độ dài content (tối đa 1000 ký tự theo database schema)
+        if (content.trim().length() > 1000) {
+            throw new RuntimeException("Nội dung tin nhắn không được vượt quá 1000 ký tự");
+        }
+        
         ChatRoom chatRoom = chatRoomRepository.findById(chatRoomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phòng chat"));
 
@@ -438,6 +448,19 @@ public class ChatRoomService {
         // Xóa phòng chat - Hibernate sẽ tự động cascade delete messages và members
         // do có annotation cascade = CascadeType.ALL và orphanRemoval = true
         chatRoomRepository.delete(chatRoom);
+    }
+
+    private String generateUniqueChatRoomName(String baseName) {
+        String uniqueName = baseName;
+        int counter = 1;
+        
+        // Kiểm tra tên gốc trước
+        while (chatRoomRepository.findByName(uniqueName).isPresent()) {
+            counter++;
+            uniqueName = baseName + " (" + counter + ")";
+        }
+        
+        return uniqueName;
     }
 
     private void createNotificationForNewChatMember(ChatRoom chatRoom, User user) {

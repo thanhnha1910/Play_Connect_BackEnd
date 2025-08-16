@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -13,5 +14,8 @@ public class LocationReviewDTO {
     private BigDecimal rating;
     private String comment;
     private UserDto user; // Sửa từ UserDTO thành UserDto
+    private String ownerReply;
+    private LocalDateTime ownerReplyAt;
+    private LocalDateTime createdAt;
     
 }

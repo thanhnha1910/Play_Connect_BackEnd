@@ -1,6 +1,7 @@
 package fpt.aptech.management_field.controllers;
 
 import fpt.aptech.management_field.models.ChatRoom;
+import fpt.aptech.management_field.models.ChatMessage;
 import fpt.aptech.management_field.payload.dtos.ChatRoomDTO;
 import fpt.aptech.management_field.payload.dtos.ChatMessageDTO;
 import fpt.aptech.management_field.payload.dtos.ChatMemberDTO;
@@ -36,7 +37,8 @@ public class ChatRoomController {
     public ResponseEntity<?> createChatRoom(@RequestBody CreateChatRoomRequest request) {
         try {
             ChatRoom chatRoom = chatRoomService.createChatRoom(request.getName(), request.getCreatorUserId());
-            ChatRoomDTO response = new ChatRoomDTO(chatRoom.getId(), chatRoom.getName());
+            ChatRoomDTO response = new ChatRoomDTO(chatRoom.getId(), chatRoom.getName(), 
+                    chatRoom.getCreatedAt(), null, null, 1);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(new MessageResponse("Lỗi tạo phòng chat: " + e.getMessage()));
@@ -64,6 +66,8 @@ public class ChatRoomController {
     //     }
     // }
 
+
+    
     // Thêm thành viên vào phòng chat bằng email
     @PostMapping("/{chatRoomId}/members/by-email")
     @PreAuthorize("hasRole('USER') ")
@@ -247,11 +251,37 @@ public class ChatRoomController {
         }
     }
 
+    // HTTP POST endpoint để gửi tin nhắn
+    @PostMapping("/{chatRoomId}/messages")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> sendMessage(@PathVariable Long chatRoomId, @RequestBody ChatMessageDTO message) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            ChatMessage savedMessage = chatRoomService.sendMessage(chatRoomId, userDetails.getId(), message.getContent());
+            
+            // Tạo ChatMessageDTO để trả về
+            ChatMessageDTO responseDTO = new ChatMessageDTO(
+                savedMessage.getId(),
+                savedMessage.getUser().getId(),
+                savedMessage.getUser().getFullName(),
+                savedMessage.getContent(),
+                savedMessage.getSentAt()
+            );
+            
+            return ResponseEntity.ok(responseDTO);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Lỗi gửi tin nhắn: " + e.getMessage()));
+        }
+    }
+
     // WebSocket mapping để gửi tin nhắn
     @MessageMapping("/chat/{chatRoomId}")
-    public void sendMessage(@Payload ChatMessageDTO message, @DestinationVariable Long chatRoomId) {
+    public void sendMessage(@Payload ChatMessageDTO message, @DestinationVariable Long chatRoomId, Authentication authentication) {
         try {
-            chatRoomService.sendMessage(chatRoomId, message.getUserId(), message.getContent());
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            chatRoomService.sendMessage(chatRoomId, userDetails.getId(), message.getContent());
         } catch (RuntimeException e) {
             // Log error hoặc gửi thông báo lỗi qua WebSocket
             System.err.println("Lỗi gửi tin nhắn: " + e.getMessage());

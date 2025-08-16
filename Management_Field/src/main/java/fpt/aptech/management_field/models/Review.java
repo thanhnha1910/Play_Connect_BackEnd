@@ -41,6 +41,12 @@ public class Review {
     @Column(name = "comment", columnDefinition = "NVARCHAR(MAX)")
     private String comment;
 
+    @Column(name = "owner_reply", columnDefinition = "NVARCHAR(MAX)")
+    private String ownerReply;
+
+    @Column(name = "owner_reply_at")
+    private LocalDateTime ownerReplyAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
