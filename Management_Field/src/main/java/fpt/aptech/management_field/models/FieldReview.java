@@ -35,4 +35,13 @@ public class FieldReview {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    /* ====== Owner reply  ====== */
+    @Column(name = "owner_reply", columnDefinition = "NVARCHAR(MAX)")
+    private String ownerReply;
+
+    @Column(name = "owner_replied_at")
+    private LocalDateTime ownerRepliedAt;
+
+
 }
