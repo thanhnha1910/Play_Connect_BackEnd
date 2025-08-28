@@ -106,7 +106,7 @@ public class BookingService {
     private AdminRevenueRepository adminRevenueRepository;
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
-    public synchronized Map<String, Object> createBooking(Long userId, BookingRequest bookingRequest) {
+    public synchronized Map<String, Object> createBooking(Long userId, BookingRequest bookingRequest, String clientType) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         Field field = fieldRepository.findById(bookingRequest.getFieldId())
@@ -143,11 +143,11 @@ public class BookingService {
             }
         }
 
-        // Kiểm tra conflict với lock
-        if (bookingRepository.existsByFieldAndFromTimeLessThanEqualAndToTimeGreaterThanEqual(
-                field, bookingRequest.getToTime(), bookingRequest.getFromTime())) {
-            throw new RuntimeException("Field is already booked for this time slot");
-        }
+        // // Kiểm tra conflict với lock
+        // if (bookingRepository.existsByFieldAndFromTimeLessThanEqualAndToTimeGreaterThanEqual(
+        //         field, bookingRequest.getToTime(), bookingRequest.getFromTime())) {
+        //     throw new RuntimeException("Field is already booked for this time slot");
+        // }
         
         Booking booking = new Booking();
         booking.setUser(user);
@@ -184,7 +184,7 @@ long hours = Duration.between(bookingRequest.getFromTime(), bookingRequest.getTo
         int discountPercent = userService.getDiscountPercent(memberLevel != null ? memberLevel : 0);
         float discountAmount = basePrice * discountPercent / 100;
         float finalPrice = basePrice - discountAmount;
-String payUrl = paymentService.initiatePayPal(booking.getBookingId(), PaymentPayable.BOOKING, (int) finalPrice);
+String payUrl = paymentService.initiatePayPal(booking.getBookingId(), PaymentPayable.BOOKING, (int) finalPrice, clientType);
 
 
         Map<String, Object> response = new HashMap<>();
@@ -194,7 +194,7 @@ String payUrl = paymentService.initiatePayPal(booking.getBookingId(), PaymentPay
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
-    public synchronized Map<String, Object> createBatchBooking(Long userId, BatchBookingRequest batchRequest) {
+    public synchronized Map<String, Object> createBatchBooking(Long userId, BatchBookingRequest batchRequest, String clientType) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
@@ -277,7 +277,7 @@ String payUrl = paymentService.initiatePayPal(booking.getBookingId(), PaymentPay
         // Create a single payment for all bookings
         // Use the first booking ID as the primary booking for payment tracking
         Long primaryBookingId = createdBookings.get(0).getBookingId();
-        String payUrl = paymentService.initiatePayPal(primaryBookingId, PaymentPayable.BOOKING, (int) totalAmount);
+        String payUrl = paymentService.initiatePayPal(primaryBookingId, PaymentPayable.BOOKING, (int) totalAmount, clientType);
         
         // Store all booking IDs for later confirmation
         List<Long> bookingIds = createdBookings.stream()

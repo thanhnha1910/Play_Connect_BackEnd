@@ -29,10 +29,25 @@ public class PaymentController {
     private ParticipatingTeamService participatingTeamService;
 
     @GetMapping("/paypal/callback")
-    public RedirectView handlePayPalCallback(@RequestParam String paymentId) {
+    public RedirectView handlePayPalCallback(
+            @RequestParam String paymentId,
+            @RequestParam(required = false) String token,
+            @RequestParam(required = false) String PayerID,
+            @RequestHeader(value = "User-Agent", required = false) String userAgent) {
         try {
+            logger.info("PayPal callback received - paymentId: {}, token: {}, PayerID: {}", paymentId, token, PayerID);
+            
             // First, handle the payment callback
             Payment callbackPayment = paymentService.handlePayPalCallback(Long.parseLong(paymentId));
+            
+            // Detect if request is from Flutter app (mobile)
+            boolean isFlutterApp = userAgent != null && 
+                (userAgent.toLowerCase().contains("flutter") || 
+                 userAgent.toLowerCase().contains("dart") ||
+                 userAgent.toLowerCase().contains("android") ||
+                 userAgent.toLowerCase().contains("ios"));
+            
+            logger.info("Request from Flutter app: {}, User-Agent: {}", isFlutterApp, userAgent);
             
             // Then, update the corresponding booking or tournament status
             if ("BOOKING".equals(callbackPayment.getPayableType().name())) {
@@ -48,8 +63,20 @@ public class PaymentController {
                 } catch (Exception e) {
                     logger.error("Failed to update booking status for booking {}: {}", callbackPayment.getPayableId(), e.getMessage());
                 }
-                String redirectUrl = String.format("http://localhost:3000/en/booking/receipt/%d?status=success", callbackPayment.getPayableId());
+                
+                // Choose redirect URL based on client type
+                String redirectUrl;
+                if (isFlutterApp) {
+                    // For Flutter app, redirect to a custom scheme or special endpoint
+                    redirectUrl = String.format("playerconnect://payment/success?bookingId=%d&paymentId=%s&token=%s&PayerID=%s", 
+                        callbackPayment.getPayableId(), paymentId, token != null ? token : "", PayerID != null ? PayerID : "");
+                } else {
+                    // For web frontend
+                    redirectUrl = String.format("http://localhost:3000/en/booking/receipt/%d?status=success", callbackPayment.getPayableId());
+                }
+                logger.info("Redirecting to: {}", redirectUrl);
                 return new RedirectView(redirectUrl);
+                
             } else if ("TOURNAMENT".equals(callbackPayment.getPayableType().name())) {
                 // Update tournament participation status to confirmed
                 try {
@@ -60,24 +87,53 @@ public class PaymentController {
                     logger.info("Tournament participation {} status updated to confirmed and payment linked after payment success", callbackPayment.getPayableId());
                     // Use tournament ID from the participant for redirect
                     Long tournamentId = participant.getTournament().getTournamentId();
-                    String redirectUrl = String.format("http://localhost:3000/en/tournament/receipt/%d?status=success", tournamentId);
+                    
+                    String redirectUrl;
+                    if (isFlutterApp) {
+                        redirectUrl = String.format("playerconnect://payment/success?tournamentId=%d&paymentId=%s&token=%s&PayerID=%s", 
+                            tournamentId, paymentId, token != null ? token : "", PayerID != null ? PayerID : "");
+                    } else {
+                        redirectUrl = String.format("http://localhost:3000/en/tournament/receipt/%d?status=success", tournamentId);
+                    }
+                    logger.info("Redirecting to: {}", redirectUrl);
                     return new RedirectView(redirectUrl);
                 } catch (Exception e) {
                     logger.error("Failed to update tournament participation status for participant {}: {}", callbackPayment.getPayableId(), e.getMessage());
                     // Fallback redirect on error
-                    return new RedirectView("http://localhost:3000/en/payment/cancel?error=tournament_update_failed&message=Failed-to-update-tournament-status");
+                    String errorUrl = isFlutterApp ? 
+                        "playerconnect://payment/error?error=tournament_update_failed&message=Failed-to-update-tournament-status" :
+                        "http://localhost:3000/en/payment/cancel?error=tournament_update_failed&message=Failed-to-update-tournament-status";
+                    return new RedirectView(errorUrl);
                 }
             } else {
                 // Fallback for other types
-                String redirectUrl = "http://localhost:3000/en/payment/success";
+                String redirectUrl = isFlutterApp ? 
+                    "playerconnect://payment/success" :
+                    "http://localhost:3000/en/payment/success";
                 return new RedirectView(redirectUrl);
             }
         } catch (NumberFormatException e) {
             logger.error("Invalid paymentId format: {}", paymentId, e);
-            return new RedirectView("http://localhost:3000/en/payment/cancel?error=invalid_payment_id&message=Invalid-payment-ID");
+            boolean isFlutterApp = userAgent != null && 
+                (userAgent.toLowerCase().contains("flutter") || 
+                 userAgent.toLowerCase().contains("dart") ||
+                 userAgent.toLowerCase().contains("android") ||
+                 userAgent.toLowerCase().contains("ios"));
+            String errorUrl = isFlutterApp ?
+                "playerconnect://payment/error?error=invalid_payment_id&message=Invalid-payment-ID" :
+                "http://localhost:3000/en/payment/cancel?error=invalid_payment_id&message=Invalid-payment-ID";
+            return new RedirectView(errorUrl);
         } catch (Exception e) {
             logger.error("Error processing PayPal callback", e);
-            return new RedirectView("http://localhost:3000/en/payment/cancel?error=payment_failed&message=Payment-processing-error");
+            boolean isFlutterApp = userAgent != null && 
+                (userAgent.toLowerCase().contains("flutter") || 
+                 userAgent.toLowerCase().contains("dart") ||
+                 userAgent.toLowerCase().contains("android") ||
+                 userAgent.toLowerCase().contains("ios"));
+            String errorUrl = isFlutterApp ?
+                "playerconnect://payment/error?error=payment_failed&message=Payment-processing-error" :
+                "http://localhost:3000/en/payment/cancel?error=payment_failed&message=Payment-processing-error";
+            return new RedirectView(errorUrl);
         }
     }
 

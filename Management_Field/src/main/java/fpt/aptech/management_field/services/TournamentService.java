@@ -22,6 +22,7 @@ import fpt.aptech.management_field.services.PayPalPaymentService;
 import org.springframework.transaction.annotation.Transactional;
 import fpt.aptech.management_field.mappers.TeamMapper;
 import fpt.aptech.management_field.mappers.TournamentMapper;
+import fpt.aptech.management_field.exception.TournamentRegistrationException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -59,16 +60,19 @@ public class TournamentService {
     }
 
     @Transactional
-    public Map<String, Object> registerTeamForTournament(TournamentRegistrationRequest request) {
+    public Map<String, Object> registerTeamForTournament(TournamentRegistrationRequest request, String clientType) {
         Tournament tournament = tournamentRepository.findById(request.getTournamentId())
-                .orElseThrow(() -> new RuntimeException("Tournament not found"));
+                .orElseThrow(() -> new TournamentRegistrationException("Không tìm thấy giải đấu"));
 
         Team team = teamRepository.findById(request.getTeamId())
-                .orElseThrow(() -> new RuntimeException("Team not found"));
+                .orElseThrow(() -> new TournamentRegistrationException("Không tìm thấy đội bóng"));
 
+        // Kiểm tra team đã đăng ký chưa
         if (participatingTeamRepository.findByTeamIdAndTournamentId(team.getTeamId(), tournament.getTournamentId()).isPresent()) {
-            throw new RuntimeException("Team already registered for this tournament.");
+            throw new TournamentRegistrationException("Đội bóng đã đăng ký giải đấu này rồi");
         }
+        
+        
 
         ParticipatingTeam participatingTeam = new ParticipatingTeam();
         participatingTeam.setTeam(team);
@@ -77,7 +81,7 @@ public class TournamentService {
         participatingTeamRepository.save(participatingTeam);
 
         double entryFee = tournament.getEntryFee();
-        String payUrl = paymentService.initiatePayPal(participatingTeam.getParticipatingTeamId(), PaymentPayable.TOURNAMENT, (int) entryFee);
+        String payUrl = paymentService.initiatePayPal(participatingTeam.getParticipatingTeamId(), PaymentPayable.TOURNAMENT, (int) entryFee, clientType != null ? clientType : "web");
 
         Map<String, Object> response = new HashMap<>();
         response.put("payUrl", payUrl);
@@ -97,6 +101,7 @@ public class TournamentService {
         if (tournamentDto != null) {
             List<ParticipatingTeam> participatingTeams = participatingTeamRepository.findByTournamentId(tournamentDto.getTournamentId());
             tournamentDto.setParticipatingTeams(participatingTeams.stream()
+                    .filter(pt -> pt.getTeam() != null) // Add null check for team
                     .map(pt -> teamRepository.findById(pt.getTeam().getTeamId()).orElse(null))
                     .filter(java.util.Objects::nonNull)
                     .map(teamMapper::toDto)

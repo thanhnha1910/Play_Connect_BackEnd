@@ -320,14 +320,31 @@ public class UserController {
 
     @PutMapping("/notifications/read-all")
     public ResponseEntity<?> markAllNotificationsAsRead() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        
         try {
-            notificationService.markAllNotificationsAsRead(userDetails.getId());
-            return ResponseEntity.ok(new MessageResponse("All notifications marked as read"));
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            Long userId = userDetails.getId();
+
+            notificationService.markAllNotificationsAsRead(userId);
+            return ResponseEntity.ok(new MessageResponse("All notifications marked as read successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new MessageResponse("Error marking notifications as read: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/notifications/unread-count")
+    public ResponseEntity<?> getUnreadNotificationCount() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            Long userId = userDetails.getId();
+
+            Long unreadCount = notificationService.getUnreadNotificationCount(userId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("unreadCount", unreadCount);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error getting unread notification count: " + e.getMessage()));
         }
     }
 }

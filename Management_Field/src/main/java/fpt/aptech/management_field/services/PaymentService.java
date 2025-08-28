@@ -35,9 +35,9 @@ public class PaymentService {
         return paymentRepository.findById(paymentId).orElseThrow(() -> new ResourceNotFoundException("Payment not found for paymentId: " + paymentId));
     }
 
-    public String initiatePayPal(Long payableId, PaymentPayable payableType, int amount) {
+    public String initiatePayPal(Long payableId, PaymentPayable payableType, int amount, String clientType) {
         Payment payment = createPayment(payableId, payableType, amount);
-        PayPalOrderCreationResponse response = payPalPaymentService.initiatePayPalPayment(payment.getPaymentId(), amount);
+        PayPalOrderCreationResponse response = payPalPaymentService.initiatePayPalPayment(payment.getPaymentId(), amount, clientType);
         payment.setTransactionId(response.getId());
         paymentRepository.save(payment);
         return response.getLinks()
