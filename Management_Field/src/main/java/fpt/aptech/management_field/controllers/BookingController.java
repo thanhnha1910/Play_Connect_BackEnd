@@ -83,12 +83,15 @@ public class BookingController {
 
     @PostMapping("/batch")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<?> createBatchBooking(@Valid @RequestBody BatchBookingRequest batchRequest, Authentication authentication) {
+    public ResponseEntity<?> createBatchBooking(
+            @Valid @RequestBody BatchBookingRequest batchRequest,
+            @RequestParam(value = "clientType", defaultValue = "web") String clientType,
+            Authentication authentication) {
         try {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
             Long userId = userDetails.getId();
 
-            Map<String, Object> result = bookingService.createBatchBooking(userId, batchRequest);
+            Map<String, Object> result = bookingService.createBatchBooking(userId, batchRequest, clientType);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
@@ -111,14 +114,17 @@ public class BookingController {
 
     @PostMapping
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<?> createBooking(@Valid @RequestBody BookingRequest bookingRequest, Authentication authentication) {
+    public ResponseEntity<?> createBooking(
+            @Valid @RequestBody BookingRequest bookingRequest, 
+            @RequestParam(value = "clientType", defaultValue = "web") String clientType,
+            Authentication authentication) {
         // Spring Security ensures 'authentication' is not null here because of @PreAuthorize
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         Long userId = userDetails.getId();
 
         try {
             // The service layer will handle the logic, including payment creation
-            Map<String, Object> response = bookingService.createBooking(userId, bookingRequest);
+            Map<String, Object> response = bookingService.createBooking(userId, bookingRequest, clientType);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             // Return a specific error message from the service
@@ -316,6 +322,7 @@ public class BookingController {
             @RequestParam String token,
             @RequestParam String PayerID,
             @RequestParam String bookingId, // Keep as String for initial validation
+            @RequestParam(value = "clientType", defaultValue = "web") String clientType,
             HttpServletResponse response) throws IOException {
         try {
             if (bookingId == null || bookingId.isEmpty()) {
@@ -331,14 +338,26 @@ public class BookingController {
             bookingService.confirmPayment(longBookingId, token, PayerID);
             // --- END OF LOGIC ---
 
-            // 3. Redirect to a "dumb" frontend receipt page
-            String redirectUrl = String.format("http://localhost:3000/en/booking/success?bookingId=%d&status=success", longBookingId);
+            // 3. Redirect based on client type
+            String redirectUrl;
+            if ("flutter".equalsIgnoreCase(clientType)) {
+                // Use custom scheme for Flutter app to redirect to receipt page
+                redirectUrl = String.format("playerconnect://payment/success?bookingId=%d&status=success", longBookingId);
+            } else {
+                // Use web URL for web frontend
+                redirectUrl = String.format("http://localhost:3000/en/booking/success?bookingId=%d&status=success", longBookingId);
+            }
             response.sendRedirect(redirectUrl);
 
         } catch (Exception e) {
             System.err.println("Payment success handling failed: " + e.getMessage());
-            // Redirect to a failure page with an error message
-            String errorRedirectUrl = "http://localhost:3000/en/booking/failure?error=" + e.getMessage();
+            // Redirect to failure page based on client type
+            String errorRedirectUrl;
+            if ("flutter".equalsIgnoreCase(clientType)) {
+                errorRedirectUrl = String.format("playerconnect://payment/error?bookingId=%s&error=%s", bookingId, e.getMessage());
+            } else {
+                errorRedirectUrl = "http://localhost:3000/en/booking/failure?error=" + e.getMessage();
+            }
             response.sendRedirect(errorRedirectUrl);
         }
     }

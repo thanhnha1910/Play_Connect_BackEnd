@@ -43,10 +43,11 @@ public class PayPalPaymentService {
      *
      * @param paymentId The unique identifier for the payment.
      * @param amount    The amount to be paid.
+     * @param clientType The type of client ("flutter" or "web") to determine callback URLs.
      * @return The PayPal approval URL for the created order.
      * @throws PayPalPaymentException if the request to PayPal fails or the approval URL is not found.
      */
-    public PayPalOrderCreationResponse initiatePayPalPayment(Long paymentId, float amount) {
+    public PayPalOrderCreationResponse initiatePayPalPayment(Long paymentId, float amount, String clientType) {
         String accessToken = getAccessToken();
         String orderId = "PAYMENT_" + paymentId;
         String description = "Thanh toán cho payment: " + paymentId;
@@ -66,9 +67,17 @@ public class PayPalPaymentService {
                 "reference_id", orderId    //
         )));
         requestBody.put("payment_source", Map.of("paypal", new HashMap<>()));
+        
+        // Always use PaymentController callback URLs - it will handle client type detection and proper redirect
+        String returnUrl = String.format("http://192.168.6.156:1444/api/payment/paypal/callback?paymentId=%d", paymentId);
+        String cancelUrl = String.format("http://192.168.6.156:1444/api/payment/paypal/cancel?paymentId=%d", paymentId);
+        
+        // Note: PaymentController will detect Flutter app via User-Agent and redirect to custom scheme
+        // For web clients, it will redirect to web URLs
+        
         requestBody.put("application_context", Map.of(
-                "return_url", String.format("http://localhost:1444/api/payment/paypal/callback?paymentId=%d", paymentId),
-                "cancel_url", String.format("http://localhost:1444/api/payment/paypal/cancel?paymentId=%d", paymentId)
+                "return_url", returnUrl,
+                "cancel_url", cancelUrl
         ));
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);

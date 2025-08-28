@@ -14,6 +14,12 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(TournamentRegistrationException.class)
+    public ResponseEntity<?> handleTournamentRegistrationException(TournamentRegistrationException ex) {
+        return ResponseEntity.badRequest()
+                .body(new MessageResponse(ex.getMessage()));
+    }
+    
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();

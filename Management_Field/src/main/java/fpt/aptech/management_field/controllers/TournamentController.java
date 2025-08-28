@@ -15,6 +15,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.transaction.Transactional;
+
 import org.springframework.web.servlet.view.RedirectView;
 
 import java.io.IOException;
@@ -41,8 +43,11 @@ public class TournamentController {
 
     @PostMapping("/register")
     @PreAuthorize("hasRole('USER') or hasRole('OWNER') or hasRole('ADMIN')")
-    public ResponseEntity<?> registerTeamForTournament(@RequestBody TournamentRegistrationRequest request) {
-        Map<String, Object> response = tournamentService.registerTeamForTournament(request);
+    @Transactional
+    public ResponseEntity<?> registerTeamForTournament(
+            @RequestBody TournamentRegistrationRequest request,
+            @RequestParam(value = "clientType", defaultValue = "web") String clientType) {
+        Map<String, Object> response = tournamentService.registerTeamForTournament(request, clientType);
         return ResponseEntity.ok(response);
     }
 
@@ -53,6 +58,7 @@ public class TournamentController {
     }
 
     @GetMapping("/receipt")
+    @Transactional
     public RedirectView handleRegister(@RequestParam("participantId") Long participantId, @RequestParam("paymentId") Long paymentId, @RequestParam("status") String status) {
         if (status.equals("success")) {
             ParticipatingTeam participant = participatingTeamService.confirmRegistration(participantId);
