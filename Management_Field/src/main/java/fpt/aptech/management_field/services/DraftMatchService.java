@@ -151,7 +151,49 @@ public class DraftMatchService {
         // Check if user already has a status for this draft match
         Optional<DraftMatchUserStatus> existingStatus = draftMatchUserStatusRepository.findByDraftMatchIdAndUserId(draftMatchId, userId);
         if (existingStatus.isPresent()) {
-            throw new IllegalStateException("Bạn đã bày tỏ quan tâm đến kèo này rồi.");
+            DraftMatchUserStatus existing = existingStatus.get();
+            // If status is pending, return current state instead of throwing error
+            if ("PENDING".equals(existing.getStatus())) {
+                return convertToDto(draftMatch, userId);
+            }
+            // If status was rejected, allow resending by updating status to PENDING
+            if ("REJECTED".equals(existing.getStatus())) {
+                existing.setStatus("PENDING");
+                draftMatchUserStatusRepository.save(existing);
+                
+                // Send notification to creator
+                try {
+                    createNotificationForDraftMatchInterest(draftMatch, user);
+                } catch (Exception e) {
+                    log.error("Failed to send notification for draft match interest", e);
+                }
+                
+                // Send confirmation notification to interested user
+                try {
+                    createNotificationForUserExpressedInterest(draftMatch, user);
+                } catch (Exception e) {
+                    log.error("Failed to send confirmation notification to interested user", e);
+                }
+                
+                // Send real-time notification via WebSocket
+                try {
+                    messagingTemplate.convertAndSend("/topic/draft-match/" + draftMatchId, 
+                        convertToDto(draftMatch, userId));
+                } catch (Exception e) {
+                    log.error("Failed to send WebSocket notification for new interest", e);
+                }
+                
+                DraftMatchDto dto = convertToDto(draftMatch, userId);
+                
+                // Send real-time update to all subscribers
+                messagingTemplate.convertAndSend("/topic/draft-match/" + draftMatch.getId(), dto);
+                
+                return dto;
+            }
+            // If status is approved, user is already in the match
+            if ("APPROVED".equals(existing.getStatus())) {
+                throw new IllegalStateException("Bạn đã được chấp nhận vào kèo này rồi.");
+            }
         }
         
         // Create new pending status
@@ -828,13 +870,14 @@ public class DraftMatchService {
         }
         
         // Check if draft match status is valid for conversion
-        if (!"FULL".equals(draftMatch.getStatus())) {
+        if (!DraftMatchStatus.FULL.equals(draftMatch.getStatus())) {
             throw new RuntimeException("Draft match must be FULL before converting to real match");
         }
         
-        // Check if there are enough interested users
-        if (draftMatch.getInterestedUsers().size() < draftMatch.getSlotsNeeded()) {
-            throw new RuntimeException("Not enough interested users to convert to real match");
+        // Check if there are enough approved users
+        Long approvedCount = draftMatchUserStatusRepository.countApprovedUsersByDraftMatchId(draftMatchId);
+        if (approvedCount < draftMatch.getSlotsNeeded()) {
+            throw new RuntimeException("Not enough approved users to convert to real match");
         }
         
         // Change status to CONVERTED

@@ -7,6 +7,7 @@ import fpt.aptech.management_field.repositories.InvitationRepository;
 import fpt.aptech.management_field.repositories.OpenMatchRepository;
 import fpt.aptech.management_field.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +39,7 @@ public class InvitationService {
     private SimpMessageSendingOperations messagingTemplate;
     
     @Transactional
-    public InvitationDto sendInvitation(SendInvitationRequest request, Long inviterId) {
+    public synchronized InvitationDto sendInvitation(SendInvitationRequest request, Long inviterId) {
         // Validate inviter exists
         User inviter = userRepository.findById(inviterId)
                 .orElseThrow(() -> new RuntimeException("Inviter not found"));
@@ -81,7 +82,19 @@ public class InvitationService {
         invitation.setType(InvitationType.INVITATION);
         invitation.setStatus(InvitationStatus.PENDING);
         
-        invitation = invitationRepository.save(invitation);
+        try {
+            invitation = invitationRepository.save(invitation);
+        } catch (DataIntegrityViolationException e) {
+            // Handle race condition - another invitation was created simultaneously
+            Optional<Invitation> raceConditionInvitation = invitationRepository
+                    .findByInviterAndInviteeAndOpenMatch(inviterId, request.getInviteeId(), request.getOpenMatchId());
+            if (raceConditionInvitation.isPresent()) {
+                throw new RuntimeException("Invitation already sent to this user for this match");
+            } else {
+                // Unexpected constraint violation, re-throw
+                throw new RuntimeException("Unable to create invitation due to database constraint", e);
+            }
+        }
         
         // Send notification to invitee using centralized service
         notificationService.createNotificationForInvitation(invitation);
@@ -96,7 +109,7 @@ public class InvitationService {
     }
     
     @Transactional
-    public InvitationDto sendJoinRequest(Long openMatchId, Long requesterId) {
+    public synchronized InvitationDto sendJoinRequest(Long openMatchId, Long requesterId) {
         // Validate requester exists
         User requester = userRepository.findById(requesterId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -119,10 +132,33 @@ public class InvitationService {
             if (existing.getStatus() == InvitationStatus.PENDING) {
                 throw new RuntimeException("Join request already sent for this match");
             }
-            // If request was rejected or cancelled, delete it to allow new request
+            // If request was rejected or cancelled, update status to PENDING to allow resending
             if (existing.getStatus() == InvitationStatus.REJECTED || 
                 existing.getStatus() == InvitationStatus.CANCELLED) {
-                invitationRepository.delete(existing);
+                existing.setStatus(InvitationStatus.PENDING);
+                existing = invitationRepository.save(existing);
+                
+                // Send notification to match creator using centralized service
+                notificationService.createNotificationForInvitation(existing);
+                
+                // Send ACTION_SUCCESS notification to the requester
+                Notification actionSuccessNotification = new Notification();
+                actionSuccessNotification.setRecipient(requester);
+                actionSuccessNotification.setTitle("Đã gửi yêu cầu");
+                actionSuccessNotification.setContent("Yêu cầu tham gia của bạn đã được gửi đi. Vui lòng chờ chủ sân duyệt.");
+                actionSuccessNotification.setType("ACTION_SUCCESS");
+                actionSuccessNotification.setRelatedEntityId(existing.getId());
+                actionSuccessNotification.setCreatedAt(LocalDateTime.now());
+                actionSuccessNotification.setIsRead(false);
+                notificationService.createNotification(actionSuccessNotification);
+                
+                // Convert to DTO for return and WebSocket broadcast
+                InvitationDto joinRequestDto = convertToDto(existing);
+                
+                // Send real-time update to match creator
+                messagingTemplate.convertAndSend("/user/" + existing.getInvitee().getId() + "/queue/invitations", joinRequestDto);
+                
+                return joinRequestDto;
             }
         }
         
@@ -139,7 +175,31 @@ public class InvitationService {
         joinRequest.setType(InvitationType.REQUEST);
         joinRequest.setStatus(InvitationStatus.PENDING);
         
-        joinRequest = invitationRepository.save(joinRequest);
+        try {
+            joinRequest = invitationRepository.save(joinRequest);
+        } catch (DataIntegrityViolationException e) {
+            // Handle race condition - another request was created simultaneously
+            // Check if a request now exists and handle accordingly
+            Optional<Invitation> raceConditionRequest = invitationRepository
+                    .findByInviterAndInviteeAndOpenMatch(requesterId, openMatch.getCreatorUser().getId(), openMatchId);
+            if (raceConditionRequest.isPresent()) {
+                Invitation existing = raceConditionRequest.get();
+                if (existing.getStatus() == InvitationStatus.PENDING) {
+                    throw new RuntimeException("Join request already sent for this match");
+                }
+                // If rejected/cancelled, update to pending
+                if (existing.getStatus() == InvitationStatus.REJECTED || 
+                    existing.getStatus() == InvitationStatus.CANCELLED) {
+                    existing.setStatus(InvitationStatus.PENDING);
+                    joinRequest = invitationRepository.save(existing);
+                } else {
+                    joinRequest = existing;
+                }
+            } else {
+                // Unexpected constraint violation, re-throw
+                throw new RuntimeException("Unable to create join request due to database constraint", e);
+            }
+        }
         
         // Send notification to match creator using centralized service
         notificationService.createNotificationForInvitation(joinRequest);
@@ -175,22 +235,38 @@ public class InvitationService {
     }
     
     public List<InvitationDto> getReceivedInvitations(Long userId) {
-        List<Invitation> invitations = invitationRepository.findPendingReceivedInvitations(userId);
+        // Use unified method to get all received items, then filter for INVITATION type
+        List<Invitation> invitations = invitationRepository.findAllReceivedItems(userId)
+                .stream()
+                .filter(i -> i.getType() == InvitationType.INVITATION)
+                .collect(Collectors.toList());
         return invitations.stream().map(this::convertToDto).collect(Collectors.toList());
     }
     
     public List<InvitationDto> getSentInvitations(Long userId) {
-        List<Invitation> invitations = invitationRepository.findSentInvitationsByUserId(userId);
+        // Use unified method to get all sent items, then filter for INVITATION type
+        List<Invitation> invitations = invitationRepository.findAllSentItems(userId)
+                .stream()
+                .filter(i -> i.getType() == InvitationType.INVITATION)
+                .collect(Collectors.toList());
         return invitations.stream().map(this::convertToDto).collect(Collectors.toList());
     }
     
     public List<InvitationDto> getReceivedJoinRequests(Long userId) {
-        List<Invitation> joinRequests = invitationRepository.findPendingReceivedJoinRequests(userId);
+        // Use unified method to get all received items, then filter for REQUEST type
+        List<Invitation> joinRequests = invitationRepository.findAllReceivedItems(userId)
+                .stream()
+                .filter(i -> i.getType() == InvitationType.REQUEST)
+                .collect(Collectors.toList());
         return joinRequests.stream().map(this::convertToDto).collect(Collectors.toList());
     }
     
     public List<InvitationDto> getSentJoinRequests(Long userId) {
-        List<Invitation> joinRequests = invitationRepository.findSentJoinRequestsByUserId(userId);
+        // Use unified method to get all sent items, then filter for REQUEST type
+        List<Invitation> joinRequests = invitationRepository.findAllSentItems(userId)
+                .stream()
+                .filter(i -> i.getType() == InvitationType.REQUEST)
+                .collect(Collectors.toList());
         return joinRequests.stream().map(this::convertToDto).collect(Collectors.toList());
     }
     

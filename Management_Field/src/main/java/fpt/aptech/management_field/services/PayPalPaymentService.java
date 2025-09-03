@@ -69,8 +69,8 @@ public class PayPalPaymentService {
         requestBody.put("payment_source", Map.of("paypal", new HashMap<>()));
         
         // Always use PaymentController callback URLs - it will handle client type detection and proper redirect
-        String returnUrl = String.format("http://192.168.6.156:1444/api/payment/paypal/callback?paymentId=%d", paymentId);
-        String cancelUrl = String.format("http://192.168.6.156:1444/api/payment/paypal/cancel?paymentId=%d", paymentId);
+        String returnUrl = String.format("http://192.168.1.12:1444/api/payment/paypal/callback?paymentId=%d", paymentId);
+        String cancelUrl = String.format("http://192.168.1.12:1444/api/payment/paypal/cancel?paymentId=%d", paymentId);
         
         // Note: PaymentController will detect Flutter app via User-Agent and redirect to custom scheme
         // For web clients, it will redirect to web URLs

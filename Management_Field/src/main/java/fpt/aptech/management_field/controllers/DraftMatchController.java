@@ -373,6 +373,26 @@ public class DraftMatchController {
     public ResponseEntity<ApiResponse<List<DraftMatchDto>>> getActiveDraftMatches(
             @RequestParam(required = false) String sportType) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        // Check if authentication exists and principal is UserDetailsImpl
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetailsImpl)) {
+            logger.info("[DRAFT_MATCH_ACTIVE] Anonymous user requesting active draft matches for sport: {}", sportType);
+            
+            try {
+                List<DraftMatchDto> draftMatches;
+                if (sportType != null && !sportType.trim().isEmpty()) {
+                    draftMatches = draftMatchService.getPublicDraftMatches(sportType);
+                } else {
+                    draftMatches = draftMatchService.getAllActiveDraftMatches();
+                }
+                return ResponseEntity.ok(new ApiResponse<>(true, "Active draft matches retrieved successfully", draftMatches));
+            } catch (Exception e) {
+                logger.error("[DRAFT_MATCH_ACTIVE] Error retrieving active draft matches for anonymous user: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(new ApiResponse<>(false, "Error retrieving active draft matches: " + e.getMessage(), null));
+            }
+        }
+        
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         
         try {
@@ -386,7 +406,12 @@ public class DraftMatchController {
                     .body(new ApiResponse<>(false, "User not found", null));
             }
             
-            List<DraftMatchDto> activeMatches = draftMatchService.getAllActiveDraftMatches(userDetails.getId());
+            List<DraftMatchDto> activeMatches;
+            if (sportType != null && !sportType.trim().isEmpty()) {
+                activeMatches = draftMatchService.getPublicDraftMatches(sportType, userDetails.getId());
+            } else {
+                activeMatches = draftMatchService.getAllActiveDraftMatches(userDetails.getId());
+            }
             
             logger.info("[DRAFT_MATCH_ACTIVE] Successfully retrieved {} active draft matches for user {}", 
                        activeMatches.size(), userDetails.getId());
